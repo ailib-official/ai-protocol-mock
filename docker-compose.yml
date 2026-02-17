@@ -1,0 +1,13 @@
+services:
+  mock-server:
+    build: .
+    ports:
+      - "4010:4010"
+    environment:
+      - HTTP_PORT=4010
+      - MANIFEST_DIR=/app/manifests
+      - MANIFEST_SYNC_URL=https://raw.githubusercontent.com/hiddenpath/ai-protocol/main/
+      - RESPONSE_DELAY=0
+      - ERROR_RATE=0
+    volumes:
+      - ./manifests:/app/manifests

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-protocol-mock"
+version = "0.1.0"
+description = "Unified mock server for AI-Protocol runtimes - HTTP provider and MCP JSON-RPC mocking"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+authors = [{ name = "AI-Protocol Team" }]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "httpx>=0.25.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pre-commit>=3.0",
+    "ruff>=0.8",
+    "black>=24.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_protocol_mock"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/ai_protocol_mock", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4"]
+ignore = ["E501"]
