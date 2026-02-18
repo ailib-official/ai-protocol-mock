@@ -1,6 +1,18 @@
 manifests/*
 !manifests/.gitkeep
 .pytest_cache/
+
+# ===== Work & Internal Documents (do not push to remote) =====
+work/
+*PLAN*.md
+*实施计划*.md
+*研发计划*.md
+RELEASE.md
+*REPORT*.md
+*SUMMARY*.md
+*ANALYSIS*.md
+*REVIEW*.md
+*AUDIT*.md
 __pycache__/
 *.py[cod]
 *.egg-info/
