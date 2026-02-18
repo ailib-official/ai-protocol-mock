@@ -39,9 +39,10 @@ docker-compose up -d
 
 - `POST /v1/chat/completions` - OpenAI-format chat
 - `POST /v1/messages` - Anthropic-format chat
-- `POST /mcp` - MCP JSON-RPC (tools/list, tools/call, capabilities)
+- `POST /mcp` - MCP JSON-RPC (`tools/list`, `tools/call`, `capabilities`, `initialize`)
 - `GET /health` - Health check
 - `GET /status` - Status with manifest sync metadata
+- `GET /providers` - Provider contracts from manifests (provider_id, api_style, chat_path)
 
 ## Using with ai-lib-python
 
@@ -61,11 +62,23 @@ response = await client.chat().messages([Message.user("Hi")]).execute()
 print(response.content)
 ```
 
+Or run tests with mock:
+
+```bash
+MOCK_HTTP_URL=http://localhost:4010 MOCK_MCP_URL=http://localhost:4010/mcp pytest tests/ -v
+```
+
 ## Using with ai-lib-rust
 
 ```bash
 export MOCK_HTTP_URL=http://localhost:4010
 cargo run --example basic_usage
+```
+
+Or run mock integration tests:
+
+```bash
+MOCK_HTTP_URL=http://localhost:4010 cargo test -- --ignored --nocapture
 ```
 
 Or in code:
@@ -82,10 +95,22 @@ let client = AiClientBuilder::new()
 Sync manifests from the ai-protocol repository:
 
 ```bash
-python scripts/sync_manifests.py [--force] [--url URL]
+python scripts/sync_manifests.py [--force] [--url URL] [--tag REF]
 ```
 
-Run before starting the server to ensure manifests are up to date. Docker Compose runs sync automatically on startup.
+- `--force` - Overwrite existing files
+- `--tag REF` - Pin to a specific ai-protocol ref (e.g. `v0.7.1`, `main`)
+- `--url URL` - Custom base URL (default: ai-protocol main)
+
+Run before starting the server to ensure manifests are up to date. Docker Compose runs sync automatically on startup. A GitHub Action runs sync daily to validate the script.
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest tests/ -v
+ruff check src tests scripts
+```
 
 ## License
 

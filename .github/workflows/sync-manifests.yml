@@ -1,0 +1,27 @@
+# Sync ai-protocol manifests on schedule - validates sync works; Docker runs sync on startup
+name: Sync Manifests
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    # Allow manual trigger
+
+jobs:
+  sync:
+    name: Sync from ai-protocol
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install httpx
+        run: pip install httpx
+
+      - name: Sync manifests
+        run: python scripts/sync_manifests.py --force

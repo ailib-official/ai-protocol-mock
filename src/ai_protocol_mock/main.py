@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from ai_protocol_mock.config import config
-from ai_protocol_mock.mocks.http_provider import create_http_router
+from ai_protocol_mock.mocks.http_provider import create_http_router, get_provider_contracts
 from ai_protocol_mock.mocks.mcp_server import create_mcp_router
 
 
@@ -41,11 +41,19 @@ def create_app() -> FastAPI:
         consider re-running sync-manifests.py.
         """
         import json
+
         meta_file = config.MANIFEST_DIR / "_sync_meta.json"
         meta = {}
         if meta_file.exists():
             meta = json.loads(meta_file.read_text())
         return {"status": "ok", "manifest_sync": meta, "version": "0.1.0"}
+
+    @app.get("/providers")
+    async def providers():
+        """Return provider contracts from manifests.
+        Each contract includes provider_id, api_style, chat_path for runtime compatibility.
+        """
+        return {"providers": get_provider_contracts()}
 
     return app
 

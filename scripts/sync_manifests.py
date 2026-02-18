@@ -17,6 +17,14 @@ import httpx
 DEFAULT_SYNC_URL = "https://raw.githubusercontent.com/hiddenpath/ai-protocol/main/"
 MANIFEST_DIR = Path(__file__).resolve().parents[1] / "manifests"
 
+
+def _resolve_sync_url(url: str, tag: str | None) -> str:
+    """Use tag/branch if provided. E.g. --tag v0.7.1 pins to that release."""
+    if not tag:
+        return url.rstrip("/")
+    return f"https://raw.githubusercontent.com/hiddenpath/ai-protocol/{tag}/"
+
+
 # Paths to sync (relative to repo root)
 SYNC_PATHS = [
     "v1/providers",
@@ -45,7 +53,13 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
     known_files = {
         "v1/providers": ["openai.yaml", "anthropic.yaml", "gemini.yaml"],
         "v1/models": [],  # May be empty or we discover from providers
-        "schemas": ["v1/provider.json", "v2/provider.json", "v2/endpoint.json", "v2/capabilities.json", "v2/errors.json"],
+        "schemas": [
+            "v1/provider.json",
+            "v2/provider.json",
+            "v2/endpoint.json",
+            "v2/capabilities.json",
+            "v2/errors.json",
+        ],
     }
     # Flatten: also try v2/ subdir
     extra = {
@@ -79,11 +93,11 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
             else:
                 fail += 1
 
-    # Try to discover provider yamls from directory listing via API
+    # Discover provider yamls from GitHub API (v1/providers)
     if rel_path == "v1/providers":
         api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v1/providers"
         try:
-            r = httpx.get(api_url, timeout=10)
+            r = httpx.get(api_url, timeout=15)
             if r.status_code == 200:
                 for item in r.json():
                     if item.get("type") == "file" and item.get("name", "").endswith((".yaml", ".yml")):
@@ -96,8 +110,28 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
                             success += 1
                         else:
                             fail += 1
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  GitHub API discovery failed: {e}", file=sys.stderr)
+
+    # Discover v1/models from GitHub API
+    if rel_path == "v1/models":
+        api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v1/models"
+        try:
+            r = httpx.get(api_url, timeout=15)
+            if r.status_code == 200:
+                for item in r.json():
+                    if item.get("type") == "file" and item.get("name", "").endswith((".yaml", ".yml")):
+                        name = item["name"]
+                        url = f"{base}/v1/models/{name}"
+                        dest = MANIFEST_DIR / "v1" / "models" / name
+                        if dest.exists() and not force:
+                            success += 1
+                        elif download_file(url, dest):
+                            success += 1
+                        else:
+                            fail += 1
+        except Exception as e:
+            print(f"  GitHub API discovery for models failed: {e}", file=sys.stderr)
 
     return success, fail
 
@@ -108,6 +142,11 @@ def main() -> int:
         "--url",
         default=DEFAULT_SYNC_URL,
         help="Base URL for sync (default: ai-protocol main)",
+    )
+    parser.add_argument(
+        "--tag",
+        metavar="REF",
+        help="Use specific ai-protocol ref (e.g. v0.7.1, main) instead of --url",
     )
     parser.add_argument(
         "--force",
@@ -124,18 +163,22 @@ def main() -> int:
     MANIFEST_DIR = Path(args.output_dir)
     MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
 
+    sync_url = _resolve_sync_url(args.url, args.tag)
+
     total_ok, total_fail = 0, 0
     for path in SYNC_PATHS:
-        ok, fail = sync_path(args.url, path, args.force)
+        ok, fail = sync_path(sync_url, path, args.force)
         total_ok += ok
         total_fail += fail
 
     # Write sync metadata for version check (used by /status endpoint)
     from datetime import datetime
+
     meta = {
-        "synced_from": args.url.rstrip("/"),
+        "synced_from": sync_url,
         "paths": SYNC_PATHS,
         "synced_at": datetime.utcnow().isoformat() + "Z",
+        "tag": args.tag,
     }
     (MANIFEST_DIR / "_sync_meta.json").write_text(json.dumps(meta, indent=2))
 

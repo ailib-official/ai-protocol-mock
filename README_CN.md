@@ -38,9 +38,10 @@ docker-compose up -d
 
 - `POST /v1/chat/completions` - OpenAI 格式 chat
 - `POST /v1/messages` - Anthropic 格式 chat
-- `POST /mcp` - MCP JSON-RPC
+- `POST /mcp` - MCP JSON-RPC（tools/list、tools/call、capabilities、initialize）
 - `GET /health` - 健康检查
 - `GET /status` - 状态及 manifest 同步信息
+- `GET /providers` - 从 manifest 获取 provider 合约（provider_id、api_style、chat_path）
 
 ## 与 ai-lib-python 配合使用
 
@@ -62,10 +63,14 @@ cargo run --example basic_usage
 ## Manifest 同步
 
 ```bash
-python scripts/sync_manifests.py [--force] [--url URL]
+python scripts/sync_manifests.py [--force] [--url URL] [--tag REF]
 ```
 
-启动服务前运行以更新 manifest。Docker Compose 会在启动时自动执行同步。
+- `--force` - 覆盖已有文件
+- `--tag REF` - 固定到指定 ai-protocol 版本（如 v0.7.1、main）
+- `--url URL` - 自定义同步源（默认：ai-protocol main）
+
+启动服务前运行以更新 manifest。Docker Compose 会在启动时自动执行同步。GitHub Action 每日运行以验证同步脚本。
 
 ## License
 

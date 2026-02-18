@@ -34,52 +34,103 @@ def _load_manifests(manifest_dir: Path) -> dict[str, dict[str, Any]]:
     return manifests
 
 
+def _get_chat_path(manifest: dict[str, Any]) -> str:
+    """Extract chat endpoint path from manifest. Supports v1 and v2 formats."""
+    ep = manifest.get("endpoints") or manifest.get("endpoint") or {}
+    if not isinstance(ep, dict):
+        return "/chat/completions"
+    chat = ep.get("chat")
+    if isinstance(chat, dict):
+        return chat.get("path", "/chat/completions") or "/chat/completions"
+    if isinstance(chat, str) and chat:
+        return chat if chat.startswith("/") else f"/{chat}"
+    return "/chat/completions"
+
+
 def _detect_api_style(manifest: dict[str, Any]) -> str:
     """Detect API style from manifest. Returns 'openai' or 'anthropic'."""
-    endpoint = manifest.get("endpoint") or manifest.get("endpoints") or {}
-    if isinstance(endpoint, dict):
-        chat = endpoint.get("chat", "")
-    else:
-        chat = ""
+    chat_path = _get_chat_path(manifest)
     # Anthropic uses /messages, OpenAI uses /chat/completions
-    if "/messages" in chat or "messages" in chat:
+    if "/messages" in chat_path or chat_path.endswith("messages"):
         return "anthropic"
     return "openai"
+
+
+def get_provider_contracts(manifest_dir: Path | None = None) -> list[dict[str, Any]]:
+    """Build provider contract list from manifests for runtime compatibility.
+    Returns list of {provider_id, api_style, chat_path, name} per provider.
+    """
+    mdir = manifest_dir or config.MANIFEST_DIR
+    manifests = _load_manifests(mdir)
+    contracts = []
+    for pid, m in manifests.items():
+        style = _detect_api_style(m)
+        chat_path = _get_chat_path(m)
+        contracts.append(
+            {
+                "provider_id": pid,
+                "api_style": "openai_compatible" if style == "openai" else "anthropic_messages",
+                "chat_path": chat_path,
+                "name": m.get("name", pid),
+            }
+        )
+    if not contracts:
+        contracts = [
+            {
+                "provider_id": "openai",
+                "api_style": "openai_compatible",
+                "chat_path": "/chat/completions",
+                "name": "OpenAI",
+            },
+            {
+                "provider_id": "anthropic",
+                "api_style": "anthropic_messages",
+                "chat_path": "/messages",
+                "name": "Anthropic",
+            },
+        ]
+    return contracts
 
 
 def _openai_response(content: str, model: str, stream: bool, usage: dict | None = None) -> dict | list[dict]:
     """Generate OpenAI-format response."""
     if stream:
         chunks = []
-        for i, char in enumerate(content):
-            chunks.append({
+        for char in content:
+            chunks.append(
+                {
+                    "id": "chatcmpl-mock",
+                    "object": "chat.completion.chunk",
+                    "created": 1699012345,
+                    "model": model,
+                    "choices": [{"index": 0, "delta": {"content": char}, "finish_reason": None}],
+                }
+            )
+        chunks.append(
+            {
                 "id": "chatcmpl-mock",
                 "object": "chat.completion.chunk",
                 "created": 1699012345,
                 "model": model,
-                "choices": [{"index": 0, "delta": {"content": char}, "finish_reason": None}],
-            })
-        chunks.append({
-            "id": "chatcmpl-mock",
-            "object": "chat.completion.chunk",
-            "created": 1699012345,
-            "model": model,
-            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-        })
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            }
+        )
         return chunks
     resp = {
         "id": "chatcmpl-mock",
         "object": "chat.completion",
         "created": 1699012345,
         "model": model,
-        "choices": [
-            {"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}
-        ],
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
     }
     if usage:
         resp["usage"] = usage
     else:
-        resp["usage"] = {"prompt_tokens": 10, "completion_tokens": len(content.split()), "total_tokens": 10 + len(content.split())}
+        resp["usage"] = {
+            "prompt_tokens": 10,
+            "completion_tokens": len(content.split()),
+            "total_tokens": 10 + len(content.split()),
+        }
     return resp
 
 
@@ -103,10 +154,12 @@ def _anthropic_response(content: str, model: str, stream: bool, usage: dict | No
         ]
         for char in content:
             chunks.append({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": char}})
-        chunks.extend([
-            {"type": "content_block_stop", "index": 0},
-            {"type": "message_stop"},
-        ])
+        chunks.extend(
+            [
+                {"type": "content_block_stop", "index": 0},
+                {"type": "message_stop"},
+            ]
+        )
         return chunks
     resp = {
         "id": "msg-mock",
@@ -133,11 +186,11 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     route_map: dict[str, tuple[str, str]] = {}
     for pid, m in manifests.items():
         style = _detect_api_style(m)
-        ep = m.get("endpoint") or m.get("endpoints") or {}
-        chat_path = ep.get("chat", "/chat/completions") if isinstance(ep, dict) else "/chat/completions"
-        if not chat_path.startswith("/"):
-            chat_path = "/" + chat_path
-        route_map[chat_path] = (pid, style)
+        chat_path = _get_chat_path(m)
+        # Register both bare path and /v1 prefix (OpenAI/Anthropic clients use /v1/...)
+        for prefix in ("", "/v1"):
+            full_path = f"{prefix}{chat_path}" if prefix else chat_path
+            route_map[full_path] = (pid, style)
 
     # If no manifests, register default OpenAI and Anthropic paths
     if not route_map:
@@ -149,6 +202,7 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     async def handle_chat(request: Request, path: str = ""):
         if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=random.choice([429, 500, 503]),
                 content={"error": {"message": "Mock error for testing"}},
@@ -157,7 +211,9 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             await asyncio.sleep(config.RESPONSE_DELAY)
 
         try:
-            body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+            body = (
+                await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+            )
         except Exception:
             body = {}
         if not isinstance(body, dict):
@@ -165,7 +221,6 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         model = body.get("model", "gpt-4o")
         stream = body.get("stream", False)
         content = config.MOCK_CONTENT
-        usage = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
 
         # Find matching style by path
         style = "openai"
@@ -178,6 +233,15 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         if "/messages" in req_path:
             style = "anthropic"
 
+        usage = (
+            {"input_tokens": 10, "output_tokens": len(content.split())}
+            if style == "anthropic"
+            else {
+                "prompt_tokens": 10,
+                "completion_tokens": len(content.split()),
+                "total_tokens": 10 + len(content.split()),
+            }
+        )
         if style == "anthropic":
             resp = _anthropic_response(content, model, stream, usage)
         else:
@@ -185,10 +249,12 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
 
         if stream:
             import json
+
             def gen():
                 for chunk in resp:
                     yield f"data: {json.dumps(chunk)}\n\n"
                 yield "data: [DONE]\n\n"
+
             return StreamingResponse(gen(), media_type="text/event-stream")
         return resp
 

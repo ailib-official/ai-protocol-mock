@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -64,10 +63,12 @@ def create_mcp_router() -> APIRouter:
             # Support streaming if requested
             stream = params.get("stream", False)
             if stream:
+
                 def gen():
                     content = f"Mock result for {tool_name} with args {tool_args}"
                     yield f"data: {json.dumps({'content': [{'type': 'text', 'text': content}]})}\n\n"
                     yield "data: [DONE]\n\n"
+
                 return StreamingResponse(gen(), media_type="text/event-stream")
             result = {
                 "content": [{"type": "text", "text": f"Mock result for {tool_name} with args {tool_args}"}],
