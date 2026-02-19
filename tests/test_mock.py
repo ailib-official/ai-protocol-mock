@@ -146,3 +146,103 @@ async def test_mcp_initialize():
     data = r.json()
     assert "result" in data
     assert "serverInfo" in data["result"]
+
+
+@pytest.mark.asyncio
+async def test_stt_transcriptions():
+    """Test STT mock returns OpenAI Whisper format."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1/audio/transcriptions",
+            files={"file": ("audio.wav", b"\x00" * 100, "audio/wav")},
+            data={"model": "whisper-1"},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert "text" in data
+    assert "mock transcription" in data["text"]
+
+
+@pytest.mark.asyncio
+async def test_tts_speech():
+    """Test TTS mock returns audio bytes."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1/audio/speech",
+            json={"model": "tts-1", "input": "Hello", "voice": "alloy"},
+        )
+    assert r.status_code == 200
+    assert r.headers.get("content-type", "").startswith("audio/")
+    assert len(r.content) > 0
+
+
+@pytest.mark.asyncio
+async def test_rerank():
+    """Test Rerank mock returns Cohere v2 format."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v2/rerank",
+            json={
+                "model": "rerank-v3.5",
+                "query": "test query",
+                "documents": ["doc1", "doc2", "doc3"],
+                "top_n": 2,
+            },
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert "results" in data
+    assert len(data["results"]) == 2
+    for item in data["results"]:
+        assert "index" in item
+        assert "relevance_score" in item
+
+
+# --- Test control headers (X-Mock-*) for integration tests ---
+
+
+@pytest.mark.asyncio
+async def test_x_mock_status():
+    """Test X-Mock-Status header forces error response."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for status in (429, 500, 503):
+            r = await client.post(
+                "/v1/chat/completions",
+                json={"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]},
+                headers={"X-Mock-Status": str(status)},
+            )
+            assert r.status_code == status
+            data = r.json()
+            assert "error" in data
+
+
+@pytest.mark.asyncio
+async def test_x_mock_content():
+    """Test X-Mock-Content header overrides response content."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1/chat/completions",
+            json={"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]},
+            headers={"X-Mock-Content": "Custom response from test"},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["choices"][0]["message"]["content"] == "Custom response from test"
+
+
+@pytest.mark.asyncio
+async def test_x_mock_tool_calls():
+    """Test X-Mock-Tool-Calls header returns tool_calls response."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1/chat/completions",
+            json={"model": "gpt-4o", "messages": [{"role": "user", "content": "Weather in Tokyo?"}]},
+            headers={"X-Mock-Tool-Calls": "1"},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert "choices" in data
+    msg = data["choices"][0]["message"]
+    assert "tool_calls" in msg
+    assert len(msg["tool_calls"]) > 0
+    assert msg["tool_calls"][0]["function"]["name"] == "get_weather"

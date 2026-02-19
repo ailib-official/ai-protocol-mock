@@ -1,4 +1,7 @@
-"""HTTP Provider Mock - manifest-driven, supports OpenAI and non-OpenAI formats."""
+"""HTTP Provider Mock - manifest-driven, supports OpenAI and non-OpenAI formats.
+
+HTTP Provider Mock 模块：基于 manifest 驱动的 HTTP 模拟，支持 OpenAI 及 Anthropic 等格式。
+"""
 
 from __future__ import annotations
 
@@ -15,22 +18,20 @@ from ai_protocol_mock.config import config
 
 
 def _load_manifests(manifest_dir: Path) -> dict[str, dict[str, Any]]:
-    """Load all provider manifests from directory."""
+    """Load all provider manifests from directory. Supports v1 and v2 providers."""
     manifests: dict[str, dict[str, Any]] = {}
-    providers_dir = manifest_dir / "v1" / "providers"
-    if not providers_dir.exists():
-        providers_dir = manifest_dir / "providers"
-    if not providers_dir.exists():
-        return manifests
-
-    for f in providers_dir.glob("*.yaml"):
-        try:
-            data = yaml.safe_load(f.read_text(encoding="utf-8"))
-            if data and isinstance(data, dict):
-                pid = data.get("id", f.stem)
-                manifests[pid] = data
-        except Exception:
-            pass
+    for rel in ["v1/providers", "v2/providers", "providers"]:
+        providers_dir = manifest_dir / rel
+        if not providers_dir.exists():
+            continue
+        for f in providers_dir.glob("*.yaml"):
+            try:
+                data = yaml.safe_load(f.read_text(encoding="utf-8"))
+                if data and isinstance(data, dict):
+                    pid = data.get("id", f.stem)
+                    manifests[pid] = data
+            except Exception:
+                pass
     return manifests
 
 
@@ -134,6 +135,69 @@ def _openai_response(content: str, model: str, stream: bool, usage: dict | None 
     return resp
 
 
+def _openai_tool_call_response(
+    tool_name: str = "get_weather",
+    tool_args: dict | None = None,
+    model: str = "gpt-4o",
+) -> dict:
+    """Generate OpenAI-format response with tool_calls."""
+    if tool_args is None:
+        tool_args = {"city": "Tokyo"}
+    import json
+    return {
+        "id": "chatcmpl-mock",
+        "object": "chat.completion",
+        "created": 1699012345,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "call_mock",
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps(tool_args),
+                            },
+                        }
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    }
+
+
+def _anthropic_tool_call_response(
+    tool_name: str = "get_weather",
+    tool_input: dict | None = None,
+    model: str = "claude-3-5-sonnet-20241022",
+) -> dict:
+    """Generate Anthropic-format response with tool_use."""
+    if tool_input is None:
+        tool_input = {"city": "Tokyo"}
+    return {
+        "id": "msg-mock",
+        "type": "message",
+        "role": "assistant",
+        "model": model,
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "toolu_mock",
+                "name": tool_name,
+                "input": tool_input,
+            }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {"input_tokens": 10, "output_tokens": 5},
+    }
+
+
 def _anthropic_response(content: str, model: str, stream: bool, usage: dict | None = None) -> dict | list[dict]:
     """Generate Anthropic-format response."""
     if stream:
@@ -200,9 +264,22 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         route_map["/messages"] = ("anthropic", "anthropic")
 
     async def handle_chat(request: Request, path: str = ""):
-        if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
-            from fastapi.responses import JSONResponse
+        from fastapi.responses import JSONResponse
 
+        # Test control headers (for integration tests)
+        mock_status = request.headers.get("x-mock-status")
+        if mock_status:
+            try:
+                status_code = int(mock_status)
+                if 400 <= status_code < 600:
+                    return JSONResponse(
+                        status_code=status_code,
+                        content={"error": {"message": f"Mock error (X-Mock-Status={status_code})", "type": "mock_error"}},
+                    )
+            except ValueError:
+                pass
+
+        if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
             return JSONResponse(
                 status_code=random.choice([429, 500, 503]),
                 content={"error": {"message": "Mock error for testing"}},
@@ -220,7 +297,8 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             body = {}
         model = body.get("model", "gpt-4o")
         stream = body.get("stream", False)
-        content = config.MOCK_CONTENT
+        content = request.headers.get("x-mock-content") or config.MOCK_CONTENT
+        mock_tool_calls = request.headers.get("x-mock-tool-calls", "").lower() in ("1", "true", "yes")
 
         # Find matching style by path
         style = "openai"
@@ -232,6 +310,20 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         # Infer from path if not in map
         if "/messages" in req_path:
             style = "anthropic"
+
+        if mock_tool_calls:
+            if style == "anthropic":
+                resp = _anthropic_tool_call_response(model=model)
+            else:
+                resp = _openai_tool_call_response(model=model)
+            if stream:
+                # Tool calls in streaming: emit as single chunk for simplicity
+                import json
+                def gen():
+                    yield f"data: {json.dumps(resp)}\n\n"
+                    yield "data: [DONE]\n\n"
+                return StreamingResponse(gen(), media_type="text/event-stream")
+            return resp
 
         usage = (
             {"input_tokens": 10, "output_tokens": len(content.split())}
@@ -273,5 +365,77 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     @router.api_route("/messages", methods=["POST"])
     async def anthropic_chat_alt(request: Request):
         return await handle_chat(request, "/messages")
+
+    # --- STT / TTS / Rerank mock endpoints (OpenAI/Cohere format) ---
+
+    @router.api_route("/v1/audio/transcriptions", methods=["POST"])
+    async def stt_transcriptions(request: Request):
+        """Mock STT (OpenAI Whisper format). Returns {"text": "mock transcription"}."""
+        if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse(
+                status_code=random.choice([429, 500, 503]),
+                content={"error": {"message": "Mock STT error"}},
+            )
+        if config.RESPONSE_DELAY > 0:
+            await asyncio.sleep(config.RESPONSE_DELAY)
+        return {"text": "mock transcription from ai-protocol-mock"}
+
+    @router.api_route("/v1/audio/speech", methods=["POST"])
+    async def tts_speech(request: Request):
+        """Mock TTS (OpenAI format). Returns minimal MP3 header bytes (mock audio)."""
+        if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse(
+                status_code=random.choice([429, 500, 503]),
+                content={"error": {"message": "Mock TTS error"}},
+            )
+        if config.RESPONSE_DELAY > 0:
+            await asyncio.sleep(config.RESPONSE_DELAY)
+        # Minimal valid MP3 frame header (13 bytes) for testing
+        mock_audio = bytes([0xFF, 0xFB, 0x90, 0x00] + [0] * 9)
+        from fastapi.responses import Response
+
+        return Response(content=mock_audio, media_type="audio/mpeg")
+
+    @router.api_route("/v2/rerank", methods=["POST"])
+    async def rerank(request: Request):
+        """Mock Rerank (Cohere v2 format). Returns results with index and relevance_score."""
+        if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse(
+                status_code=random.choice([429, 500, 503]),
+                content={"message": "Mock Rerank error"},
+            )
+        if config.RESPONSE_DELAY > 0:
+            await asyncio.sleep(config.RESPONSE_DELAY)
+        try:
+            body = (
+                await request.json()
+                if request.headers.get("content-type", "").startswith("application/json")
+                else {}
+            )
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        documents = body.get("documents", [])
+        top_n = body.get("top_n", len(documents))
+        results = [
+            {"index": i, "relevance_score": 1.0 - (i * 0.1)}
+            for i in range(min(top_n, len(documents)))
+        ]
+        # Cohere v2 format: results, id, meta (api_version, billed_units)
+        return {
+            "results": results,
+            "id": "mock-rerank-id",
+            "meta": {
+                "api_version": {"version": "2", "is_experimental": False},
+                "billed_units": {"search_units": 1},
+            },
+        }
 
     return router

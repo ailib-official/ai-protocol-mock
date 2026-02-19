@@ -1,4 +1,7 @@
-"""Configuration loading for ai-protocol-mock."""
+"""Configuration loading for ai-protocol-mock.
+
+配置加载模块：从环境变量读取 mock 服务配置（端口、manifest 路径等）。
+"""
 
 from __future__ import annotations
 

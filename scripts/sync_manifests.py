@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Sync manifest files from ai-protocol main repository.
 
-Downloads v1/providers, v1/models, schemas from GitHub raw URL to manifests/.
+从 ai-protocol 主仓库同步 manifest 文件。
+Downloads v1/providers, v2/providers, v1/models, schemas from GitHub raw URL to manifests/.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ def _resolve_sync_url(url: str, tag: str | None) -> str:
 # Paths to sync (relative to repo root)
 SYNC_PATHS = [
     "v1/providers",
+    "v2/providers",
     "v1/models",
     "schemas",
 ]
@@ -52,6 +54,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
     # For simplicity, we try common patterns
     known_files = {
         "v1/providers": ["openai.yaml", "anthropic.yaml", "gemini.yaml"],
+        "v2/providers": ["openai.yaml", "anthropic.yaml", "cohere.yaml", "jina.yaml"],
         "v1/models": [],  # May be empty or we discover from providers
         "schemas": [
             "v1/provider.json",
@@ -93,7 +96,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
             else:
                 fail += 1
 
-    # Discover provider yamls from GitHub API (v1/providers)
+    # Discover provider yamls from GitHub API (v1 and v2 providers)
     if rel_path == "v1/providers":
         api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v1/providers"
         try:
@@ -112,6 +115,25 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
                             fail += 1
         except Exception as e:
             print(f"  GitHub API discovery failed: {e}", file=sys.stderr)
+
+    if rel_path == "v2/providers":
+        api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v2/providers"
+        try:
+            r = httpx.get(api_url, timeout=15)
+            if r.status_code == 200:
+                for item in r.json():
+                    if item.get("type") == "file" and item.get("name", "").endswith((".yaml", ".yml")):
+                        name = item["name"]
+                        url = f"{base}/v2/providers/{name}"
+                        dest = MANIFEST_DIR / "v2" / "providers" / name
+                        if dest.exists() and not force:
+                            success += 1
+                        elif download_file(url, dest):
+                            success += 1
+                        else:
+                            fail += 1
+        except Exception as e:
+            print(f"  GitHub API discovery for v2 providers failed: {e}", file=sys.stderr)
 
     # Discover v1/models from GitHub API
     if rel_path == "v1/models":

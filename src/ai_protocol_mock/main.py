@@ -1,4 +1,7 @@
-"""Main FastAPI application for ai-protocol-mock."""
+"""Main FastAPI application for ai-protocol-mock.
+
+ai-protocol-mock 主应用模块：FastAPI 入口，挂载 HTTP 与 MCP 路由。
+"""
 
 from __future__ import annotations
 

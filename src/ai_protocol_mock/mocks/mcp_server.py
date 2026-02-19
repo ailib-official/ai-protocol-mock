@@ -1,4 +1,7 @@
-"""MCP JSON-RPC Mock - tools/list, tools/call, capabilities."""
+"""MCP JSON-RPC Mock - tools/list, tools/call, capabilities.
+
+MCP JSON-RPC 模拟模块：实现 tools/list、tools/call、capabilities、initialize。
+"""
 
 from __future__ import annotations
 

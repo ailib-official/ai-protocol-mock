@@ -5,6 +5,7 @@ Unified mock server for AI-Protocol runtimes. Provides HTTP provider mock (OpenA
 ## Features
 
 - **Manifest-driven HTTP mock**: Generates responses in OpenAI or Anthropic format based on provider manifests
+- **STT / TTS / Rerank mock**: Simulates speech-to-text, text-to-speech, and document reranking endpoints (OpenAI/Cohere compliant)
 - **MCP JSON-RPC mock**: Implements `tools/list`, `tools/call`, `capabilities`, `initialize`
 - **Configurable**: Response delay, error rate, mock content via environment variables
 - **Docker**: One-command startup with `docker-compose up`
@@ -35,10 +36,23 @@ docker-compose up -d
 | ERROR_RATE | 0 | Probability (0-1) of returning 429/500/503 |
 | MOCK_CONTENT | Mock response from ai-protocol-mock | Default response content |
 
+### Test Control Headers (X-Mock-*)
+
+For integration tests, requests can include these headers to control mock behavior:
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| X-Mock-Status | Force HTTP error status (400-599) | 429, 500, 503 |
+| X-Mock-Content | Override response content for this request | Custom text |
+| X-Mock-Tool-Calls | Return tool_calls instead of text | 1, true, yes |
+
 ## Endpoints
 
 - `POST /v1/chat/completions` - OpenAI-format chat
 - `POST /v1/messages` - Anthropic-format chat
+- `POST /v1/audio/transcriptions` - STT (OpenAI Whisper format), returns `{"text": "..."}`
+- `POST /v1/audio/speech` - TTS (OpenAI format), returns `audio/mpeg` bytes
+- `POST /v2/rerank` - Rerank (Cohere v2 format), request `{query, documents, top_n}`, returns `{results, id, meta}`
 - `POST /mcp` - MCP JSON-RPC (`tools/list`, `tools/call`, `capabilities`, `initialize`)
 - `GET /health` - Health check
 - `GET /status` - Status with manifest sync metadata
@@ -68,6 +82,12 @@ Or run tests with mock:
 MOCK_HTTP_URL=http://localhost:4010 MOCK_MCP_URL=http://localhost:4010/mcp pytest tests/ -v
 ```
 
+**Remote / proxy environments**: If your machine uses HTTP/HTTPS proxy, set `NO_PROXY` to include the mock server IP so Python's httpx can reach it directly:
+
+```bash
+NO_PROXY=192.168.2.13,localhost,127.0.0.1 MOCK_HTTP_URL=http://192.168.2.13:4010 MOCK_MCP_URL=http://192.168.2.13:4010/mcp pytest tests/ -v
+```
+
 ## Using with ai-lib-rust
 
 ```bash
@@ -78,7 +98,7 @@ cargo run --example basic_usage
 Or run mock integration tests:
 
 ```bash
-MOCK_HTTP_URL=http://localhost:4010 cargo test -- --ignored --nocapture
+MOCK_HTTP_URL=http://localhost:4010 MOCK_MCP_URL=http://localhost:4010/mcp cargo test -- --ignored --nocapture
 ```
 
 Or in code:
