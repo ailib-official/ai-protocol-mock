@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-protocol-mock"
-version = "0.1.5"
+version = "0.1.6"
 description = "Unified mock server for AI-Protocol runtimes - HTTP provider and MCP JSON-RPC mocking"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
@@ -19,6 +19,9 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.scripts]
+sync-manifests = "scripts.sync_manifests:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
@@ -30,6 +33,7 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_protocol_mock"]
+force-include = { "scripts" = "scripts" }
 
 [tool.hatch.build.targets.sdist]
 include = ["src/ai_protocol_mock", "scripts"]
