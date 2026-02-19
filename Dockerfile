@@ -2,12 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
-
+COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY scripts/ scripts/
-RUN mkdir -p manifests
+RUN pip install --no-cache-dir . && mkdir -p manifests
 
 ENV HTTP_PORT=4010
 ENV MANIFEST_DIR=/app/manifests
