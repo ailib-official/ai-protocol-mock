@@ -81,6 +81,14 @@ print(response.content)
 MOCK_HTTP_URL=http://localhost:4010 MOCK_MCP_URL=http://localhost:4010/mcp pytest tests/ -v
 ```
 
+## 第三方集成（ZeroClaw 等）
+
+ai-protocol-mock 面向下游运行时和框架的确定性测试：
+
+- **ZeroClaw / ZeroSpider**：设置 `MOCK_HTTP_URL` 和 `MOCK_MCP_URL` 指向 mock 服务（如 `http://192.168.2.13:4010`），运行集成测试前设置 `NO_PROXY` 以绕过代理
+- **CI 流水线**：通过 `docker-compose up -d` 或 `uvicorn ai_protocol_mock.main:app --host 0.0.0.0 --port 4010` 启动 mock
+- **错误注入**：设置 `ERROR_RATE=0.1` 模拟 429/500/503 进行弹性测试
+
 **远程 / 代理环境**：若本机配置了 HTTP/HTTPS 代理，需设置 `NO_PROXY` 包含 mock 服务 IP，以便 Python 的 httpx 直连：
 
 ```bash

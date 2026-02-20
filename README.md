@@ -82,6 +82,14 @@ Or run tests with mock:
 MOCK_HTTP_URL=http://localhost:4010 MOCK_MCP_URL=http://localhost:4010/mcp pytest tests/ -v
 ```
 
+## Third-Party Integration (ZeroClaw, etc.)
+
+ai-protocol-mock is designed for downstream runtimes and frameworks that need deterministic testing without real API calls:
+
+- **ZeroClaw / ZeroSpider**: Set `MOCK_HTTP_URL` and `MOCK_MCP_URL` to the mock server (e.g. `http://192.168.2.13:4010`) before running integration tests. Use `NO_PROXY` to bypass HTTP proxies when testing against a local or LAN mock.
+- **CI pipelines**: Start mock via `docker-compose up -d` or `uvicorn ai_protocol_mock.main:app --host 0.0.0.0 --port 4010`, then run tests with the env vars above.
+- **Error injection**: Set `ERROR_RATE=0.1` to simulate 429/500/503 for resilience testing.
+
 **Remote / proxy environments**: If your machine uses HTTP/HTTPS proxy, set `NO_PROXY` to include the mock server IP so Python's httpx can reach it directly:
 
 ```bash
