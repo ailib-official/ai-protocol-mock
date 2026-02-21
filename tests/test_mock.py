@@ -100,6 +100,35 @@ async def test_http_mock_anthropic():
 
 
 @pytest.mark.asyncio
+async def test_http_mock_accepts_tool_messages():
+    """Test mock accepts tool role (AI-Protocol standard_message_roles)."""
+    messages = [
+        {"role": "user", "content": "Weather in Tokyo?"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_abc123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city":"Tokyo"}'},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_abc123", "content": "Sunny, 22°C"},
+    ]
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1/chat/completions",
+            json={"model": "gpt-4o", "messages": messages, "tools": [{"type": "function", "function": {"name": "get_weather"}}]},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert "choices" in data
+    assert len(data["choices"]) > 0
+
+
+@pytest.mark.asyncio
 async def test_mcp_tools_list():
     """Test MCP tools/list returns tool list."""
     async with AsyncClient(transport=transport, base_url="http://test") as client:
