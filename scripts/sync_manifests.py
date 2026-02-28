@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -38,7 +39,7 @@ SYNC_PATHS = [
 def download_file(url: str, dest: Path) -> bool:
     """Download a single file, return True on success."""
     try:
-        resp = httpx.get(url, follow_redirects=True, timeout=30)
+        resp = httpx.get(url, follow_redirects=True, timeout=30, trust_env=False)
         resp.raise_for_status()
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(resp.content)
@@ -53,11 +54,12 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
     # GitHub raw doesn't support directory listing; we use the GitHub API or known file list
     # For simplicity, we try common patterns
     known_files = {
-        "v1/providers": ["openai.yaml", "anthropic.yaml", "gemini.yaml"],
+        "v1/providers": ["openai.yaml", "anthropic.yaml"],
         "v2/providers": ["openai.yaml", "anthropic.yaml", "cohere.yaml", "jina.yaml"],
         "v1/models": [],  # May be empty or we discover from providers
         "schemas": [
-            "v1/provider.json",
+            "v1.json",
+            "spec.json",
             "v2/provider.json",
             "v2/endpoint.json",
             "v2/capabilities.json",
@@ -66,7 +68,21 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
     }
     # Flatten: also try v2/ subdir
     extra = {
-        "schemas/v2": ["provider.json", "endpoint.json", "capabilities.json", "errors.json", "message.json"],
+        "schemas/v2": [
+            "provider.json",
+            "endpoint.json",
+            "availability.json",
+            "capabilities.json",
+            "errors.json",
+            "regions.json",
+            "mcp.json",
+            "computer-use.json",
+            "multimodal.json",
+            "provider-contract.json",
+            "context-policy.json",
+            "pricing.json",
+            "message-roles.json",
+        ],
     }
     success, fail = 0, 0
     base = base_url.rstrip("/")
@@ -100,7 +116,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
     if rel_path == "v1/providers":
         api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v1/providers"
         try:
-            r = httpx.get(api_url, timeout=15)
+            r = httpx.get(api_url, timeout=15, trust_env=False)
             if r.status_code == 200:
                 for item in r.json():
                     if item.get("type") == "file" and item.get("name", "").endswith((".yaml", ".yml")):
@@ -119,7 +135,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
     if rel_path == "v2/providers":
         api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v2/providers"
         try:
-            r = httpx.get(api_url, timeout=15)
+            r = httpx.get(api_url, timeout=15, trust_env=False)
             if r.status_code == 200:
                 for item in r.json():
                     if item.get("type") == "file" and item.get("name", "").endswith((".yaml", ".yml")):
@@ -139,7 +155,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
     if rel_path == "v1/models":
         api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v1/models"
         try:
-            r = httpx.get(api_url, timeout=15)
+            r = httpx.get(api_url, timeout=15, trust_env=False)
             if r.status_code == 200:
                 for item in r.json():
                     if item.get("type") == "file" and item.get("name", "").endswith((".yaml", ".yml")):
@@ -159,6 +175,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
 
 
 def main() -> int:
+    global MANIFEST_DIR
     parser = argparse.ArgumentParser(description="Sync manifests from ai-protocol")
     parser.add_argument(
         "--url",
@@ -181,7 +198,6 @@ def main() -> int:
         help="Output directory for manifests",
     )
     args = parser.parse_args()
-    global MANIFEST_DIR
     MANIFEST_DIR = Path(args.output_dir)
     MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -194,12 +210,10 @@ def main() -> int:
         total_fail += fail
 
     # Write sync metadata for version check (used by /status endpoint)
-    from datetime import datetime
-
     meta = {
         "synced_from": sync_url,
         "paths": SYNC_PATHS,
-        "synced_at": datetime.utcnow().isoformat() + "Z",
+        "synced_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "tag": args.tag,
     }
     (MANIFEST_DIR / "_sync_meta.json").write_text(json.dumps(meta, indent=2))
