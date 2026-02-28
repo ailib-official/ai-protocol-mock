@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-protocol-mock"
-version = "0.1.7"
+version = "0.1.8"
 description = "Unified mock server for AI-Protocol runtimes - HTTP provider and MCP JSON-RPC mocking"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
