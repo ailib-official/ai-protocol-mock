@@ -240,6 +240,51 @@ def _anthropic_response(content: str, model: str, stream: bool, usage: dict | No
     return resp
 
 
+def _gemini_response(content: str, model: str, stream: bool) -> dict | list[dict]:
+    """Generate Gemini-format response for generateContent APIs."""
+    if stream:
+        return [
+            {
+                "candidates": [
+                    {
+                        "index": 0,
+                        "content": {"parts": [{"text": content[: max(1, len(content) // 2)]}]},
+                        "finishReason": None,
+                    }
+                ]
+            },
+            {
+                "candidates": [
+                    {
+                        "index": 0,
+                        "content": {"parts": [{"text": content[max(1, len(content) // 2) :]}]},
+                        "finishReason": "STOP",
+                    }
+                ],
+                "usageMetadata": {
+                    "promptTokenCount": 10,
+                    "candidatesTokenCount": max(1, len(content.split())),
+                    "totalTokenCount": 10 + max(1, len(content.split())),
+                },
+            },
+        ]
+    return {
+        "candidates": [
+            {
+                "index": 0,
+                "content": {"parts": [{"text": content}]},
+                "finishReason": "STOP",
+            }
+        ],
+        "usageMetadata": {
+            "promptTokenCount": 10,
+            "candidatesTokenCount": max(1, len(content.split())),
+            "totalTokenCount": 10 + max(1, len(content.split())),
+        },
+        "modelVersion": model,
+    }
+
+
 def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     """Create FastAPI router with manifest-driven HTTP mock routes."""
     router = APIRouter()
@@ -310,10 +355,31 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         # Infer from path if not in map
         if "/messages" in req_path:
             style = "anthropic"
+        elif ":generateContent" in req_path or ":streamGenerateContent" in req_path:
+            style = "gemini"
 
         if mock_tool_calls:
             if style == "anthropic":
                 resp = _anthropic_tool_call_response(model=model)
+            elif style == "gemini":
+                resp = {
+                    "candidates": [
+                        {
+                            "index": 0,
+                            "content": {
+                                "parts": [
+                                    {
+                                        "functionCall": {
+                                            "name": "get_weather",
+                                            "args": {"city": "Tokyo"},
+                                        }
+                                    }
+                                ]
+                            },
+                            "finishReason": "STOP",
+                        }
+                    ]
+                }
             else:
                 resp = _openai_tool_call_response(model=model)
             if stream:
@@ -336,6 +402,8 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         )
         if style == "anthropic":
             resp = _anthropic_response(content, model, stream, usage)
+        elif style == "gemini":
+            resp = _gemini_response(content, model, stream)
         else:
             resp = _openai_response(content, model, stream, usage)
 
@@ -365,6 +433,14 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     @router.api_route("/messages", methods=["POST"])
     async def anthropic_chat_alt(request: Request):
         return await handle_chat(request, "/messages")
+
+    @router.api_route("/v1beta/models/{model_name}:generateContent", methods=["POST"])
+    async def gemini_generate_content(request: Request, model_name: str):
+        return await handle_chat(request, f"/v1beta/models/{model_name}:generateContent")
+
+    @router.api_route("/v1beta/models/{model_name}:streamGenerateContent", methods=["POST"])
+    async def gemini_stream_generate_content(request: Request, model_name: str):
+        return await handle_chat(request, f"/v1beta/models/{model_name}:streamGenerateContent")
 
     # --- STT / TTS / Rerank mock endpoints (OpenAI/Cohere format) ---
 

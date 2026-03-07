@@ -100,6 +100,35 @@ async def test_http_mock_anthropic():
 
 
 @pytest.mark.asyncio
+async def test_http_mock_gemini_generate_content():
+    """Test Gemini-style generateContent endpoint."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1beta/models/gemini-2.0-flash:generateContent",
+            json={"contents": [{"role": "user", "parts": [{"text": "Hi"}]}]},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert "candidates" in data
+    assert data["candidates"][0]["content"]["parts"][0]["text"]
+    assert "usageMetadata" in data
+
+
+@pytest.mark.asyncio
+async def test_http_mock_gemini_stream_generate_content():
+    """Test Gemini-style streamGenerateContent endpoint."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
+            json={"contents": [{"role": "user", "parts": [{"text": "Hi"}]}], "stream": True},
+        )
+    assert r.status_code == 200
+    assert "text/event-stream" in r.headers.get("content-type", "")
+    assert "data: " in r.text
+    assert "[DONE]" in r.text
+
+
+@pytest.mark.asyncio
 async def test_http_mock_accepts_tool_messages():
     """Test mock accepts tool role (AI-Protocol standard_message_roles)."""
     messages = [
