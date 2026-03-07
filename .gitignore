@@ -1,6 +1,8 @@
 manifests/*
 !manifests/.gitkeep
 .pytest_cache/
+.cursor/
+.agents/
 
 # ===== Work & Internal Documents (do not push to remote) =====
 work/
