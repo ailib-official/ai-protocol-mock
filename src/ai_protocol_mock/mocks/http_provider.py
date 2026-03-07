@@ -7,12 +7,15 @@ from __future__ import annotations
 
 import asyncio
 import random
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import yaml
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ai_protocol_mock.config import config
 
@@ -291,6 +294,10 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     mdir = manifest_dir or config.MANIFEST_DIR
     manifests = _load_manifests(mdir)
 
+    # In-memory async job registry for deterministic polling simulation.
+    # Key: job id, Value: {"status": str, "polls": int, "created_at": str, "provider": str}
+    video_jobs: dict[str, dict[str, Any]] = {}
+
     # Build route map: path -> (provider_id, api_style)
     route_map: dict[str, tuple[str, str]] = {}
     for pid, m in manifests.items():
@@ -308,10 +315,14 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         route_map["/v1/messages"] = ("anthropic", "anthropic")
         route_map["/messages"] = ("anthropic", "anthropic")
 
-    async def handle_chat(request: Request, path: str = ""):
-        from fastapi.responses import JSONResponse
+    async def _apply_test_controls(request: Request) -> Response | None:
+        """Apply generic test controls from headers.
 
-        # Test control headers (for integration tests)
+        Supported headers:
+        - X-Mock-Status: force HTTP status with JSON error body
+        - X-Mock-Timeout-Ms: sleep for given milliseconds before response
+        - X-Mock-Invalid-Content-Type: return text/plain content intentionally
+        """
         mock_status = request.headers.get("x-mock-status")
         if mock_status:
             try:
@@ -323,6 +334,25 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
                     )
             except ValueError:
                 pass
+
+        timeout_ms = request.headers.get("x-mock-timeout-ms")
+        if timeout_ms:
+            try:
+                delay = max(0, int(timeout_ms)) / 1000.0
+                await asyncio.sleep(delay)
+            except ValueError:
+                pass
+
+        if request.headers.get("x-mock-invalid-content-type", "").lower() in {"1", "true", "yes"}:
+            return Response(content="mock-invalid-content-type", media_type="text/plain")
+
+        return None
+
+    async def handle_chat(request: Request, path: str = ""):
+
+        controlled = await _apply_test_controls(request)
+        if controlled is not None:
+            return controlled
 
         if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
             return JSONResponse(
@@ -447,9 +477,10 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     @router.api_route("/v1/audio/transcriptions", methods=["POST"])
     async def stt_transcriptions(request: Request):
         """Mock STT (OpenAI Whisper format). Returns {"text": "mock transcription"}."""
+        controlled = await _apply_test_controls(request)
+        if controlled is not None:
+            return controlled
         if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
-            from fastapi.responses import JSONResponse
-
             return JSONResponse(
                 status_code=random.choice([429, 500, 503]),
                 content={"error": {"message": "Mock STT error"}},
@@ -461,9 +492,10 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     @router.api_route("/v1/audio/speech", methods=["POST"])
     async def tts_speech(request: Request):
         """Mock TTS (OpenAI format). Returns minimal MP3 header bytes (mock audio)."""
+        controlled = await _apply_test_controls(request)
+        if controlled is not None:
+            return controlled
         if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
-            from fastapi.responses import JSONResponse
-
             return JSONResponse(
                 status_code=random.choice([429, 500, 503]),
                 content={"error": {"message": "Mock TTS error"}},
@@ -472,16 +504,15 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             await asyncio.sleep(config.RESPONSE_DELAY)
         # Minimal valid MP3 frame header (13 bytes) for testing
         mock_audio = bytes([0xFF, 0xFB, 0x90, 0x00] + [0] * 9)
-        from fastapi.responses import Response
-
         return Response(content=mock_audio, media_type="audio/mpeg")
 
     @router.api_route("/v2/rerank", methods=["POST"])
     async def rerank(request: Request):
         """Mock Rerank (Cohere v2 format). Returns results with index and relevance_score."""
+        controlled = await _apply_test_controls(request)
+        if controlled is not None:
+            return controlled
         if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
-            from fastapi.responses import JSONResponse
-
             return JSONResponse(
                 status_code=random.choice([429, 500, 503]),
                 content={"message": "Mock Rerank error"},
@@ -513,5 +544,106 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
                 "billed_units": {"search_units": 1},
             },
         }
+
+    @router.api_route("/v1/video/generations", methods=["POST"])
+    async def video_generations(request: Request):
+        """Mock video generation endpoint with sync and async-polling modes."""
+        controlled = await _apply_test_controls(request)
+        if controlled is not None:
+            return controlled
+        if config.ERROR_RATE > 0 and random.random() < config.ERROR_RATE:
+            return JSONResponse(
+                status_code=random.choice([429, 500, 503]),
+                content={"error": {"message": "Mock video generation error", "type": "video_error"}},
+            )
+        if config.RESPONSE_DELAY > 0:
+            await asyncio.sleep(config.RESPONSE_DELAY)
+        try:
+            body = (
+                await request.json()
+                if request.headers.get("content-type", "").startswith("application/json")
+                else {}
+            )
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+
+        async_mode = bool(body.get("async", True))
+        model = str(body.get("model", "video-gen-1"))
+        provider = str(body.get("provider", "mock"))
+        prompt = str(body.get("prompt", "mock video prompt"))
+
+        if not async_mode:
+            return {
+                "id": f"vid_{uuid4().hex[:12]}",
+                "status": "succeeded",
+                "model": model,
+                "provider": provider,
+                "prompt": prompt,
+                "output": {
+                    "url": "https://example.com/mock-video.mp4",
+                    "content_type": "video/mp4",
+                    "duration_seconds": 4,
+                },
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+
+        job_id = f"job_{uuid4().hex[:12]}"
+        video_jobs[job_id] = {
+            "status": "queued",
+            "polls": 0,
+            "provider": provider,
+            "model": model,
+            "prompt": prompt,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        return JSONResponse(
+            status_code=202,
+            content={
+                "id": job_id,
+                "status": "queued",
+                "poll_url": f"/v1/video/generations/{job_id}",
+                "created_at": video_jobs[job_id]["created_at"],
+            },
+        )
+
+    @router.api_route("/v1/video/generations/{job_id}", methods=["GET"])
+    async def get_video_generation_status(job_id: str, request: Request):
+        """Poll mock video generation job status."""
+        controlled = await _apply_test_controls(request)
+        if controlled is not None:
+            return controlled
+        job = video_jobs.get(job_id)
+        if job is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error": {"message": f"Video job '{job_id}' not found", "type": "not_found"}},
+            )
+
+        job["polls"] = int(job.get("polls", 0)) + 1
+        if job["polls"] == 1:
+            job["status"] = "running"
+        elif job["polls"] >= 2:
+            job["status"] = "succeeded"
+
+        response: dict[str, Any] = {
+            "id": job_id,
+            "status": job["status"],
+            "provider": job["provider"],
+            "model": job["model"],
+            "created_at": job["created_at"],
+            "updated_at": datetime.now(UTC).isoformat(),
+            "polls": job["polls"],
+        }
+        if job["status"] == "succeeded":
+            response["output"] = {
+                "url": "https://example.com/mock-video.mp4",
+                "content_type": "video/mp4",
+                "duration_seconds": 4,
+                "completed_at": datetime.now(UTC).isoformat(),
+                "elapsed_ms": int((time.time() * 1000) % 100000),
+            }
+        return response
 
     return router

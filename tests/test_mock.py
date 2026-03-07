@@ -256,6 +256,54 @@ async def test_rerank():
         assert "relevance_score" in item
 
 
+@pytest.mark.asyncio
+async def test_video_generation_async_polling_flow():
+    """Test async video generation and polling lifecycle."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/v1/video/generations",
+            json={"model": "video-gen-1", "prompt": "A city skyline at sunset", "async": True},
+        )
+        assert create_resp.status_code == 202
+        created = create_resp.json()
+        assert created["status"] == "queued"
+        job_id = created["id"]
+
+        poll_1 = await client.get(f"/v1/video/generations/{job_id}")
+        assert poll_1.status_code == 200
+        assert poll_1.json()["status"] in {"running", "queued"}
+
+        poll_2 = await client.get(f"/v1/video/generations/{job_id}")
+        assert poll_2.status_code == 200
+        data = poll_2.json()
+        assert data["status"] == "succeeded"
+        assert "output" in data
+        assert data["output"]["content_type"] == "video/mp4"
+
+
+@pytest.mark.asyncio
+async def test_video_generation_sync_mode():
+    """Test sync video generation response path."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1/video/generations",
+            json={"model": "video-gen-1", "prompt": "A robot walking", "async": False},
+        )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "succeeded"
+    assert data["output"]["content_type"] == "video/mp4"
+
+
+@pytest.mark.asyncio
+async def test_video_generation_not_found():
+    """Polling an unknown video job should return 404."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.get("/v1/video/generations/job_missing")
+    assert r.status_code == 404
+    assert "error" in r.json()
+
+
 # --- Test control headers (X-Mock-*) for integration tests ---
 
 
@@ -304,3 +352,16 @@ async def test_x_mock_tool_calls():
     assert "tool_calls" in msg
     assert len(msg["tool_calls"]) > 0
     assert msg["tool_calls"][0]["function"]["name"] == "get_weather"
+
+
+@pytest.mark.asyncio
+async def test_x_mock_invalid_content_type():
+    """Test invalid content type injection for failure simulation."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/v1/video/generations",
+            json={"model": "video-gen-1", "async": True},
+            headers={"X-Mock-Invalid-Content-Type": "1"},
+        )
+    assert r.status_code == 200
+    assert r.headers.get("content-type", "").startswith("text/plain")

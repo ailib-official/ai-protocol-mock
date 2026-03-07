@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Video generation mock lifecycle**: added `POST /v1/video/generations` and `GET /v1/video/generations/{job_id}` with deterministic async polling transitions (`queued -> running -> succeeded`)
+- **Failure simulation controls**: added generic test headers for timeout and invalid content type injection (`X-Mock-Timeout-Ms`, `X-Mock-Invalid-Content-Type`)
+- **Coverage expansion**: added tests for video sync/async/not-found paths and failure injection behavior
+
 ## 0.1.8 - 2026-02-28
 
 ### Fixed
