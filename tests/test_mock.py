@@ -47,6 +47,9 @@ async def test_providers():
     assert "providers" in data
     providers = data["providers"]
     assert len(providers) >= 1
+    provider_ids = {p.get("provider_id") for p in providers}
+    for expected in ("cohere", "moonshot", "zhipu", "jina"):
+        assert expected in provider_ids
     for p in providers:
         assert "provider_id" in p
         assert "api_style" in p
