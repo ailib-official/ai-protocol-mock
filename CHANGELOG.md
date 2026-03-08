@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.1.9 - 2026-03-08
+
+### Added
+
+- **Video generation terminal-state lifecycle**: async polling now supports deterministic terminal variants `succeeded` / `failed` / `cancelled`.
+- **Terminal-state controls**: `X-Mock-Video-Terminal` header and request `terminal_state` parameter for targeted scenario injection.
+- **Lifecycle documentation updates**: README now documents state machine and new test-control headers.
+
+### Changed
+
+- Async video job polling remains stable after terminal state is reached to avoid flaky test semantics.
+- Extended test coverage for failed/cancelled terminal states in `tests/test_mock.py`.
+
 ### Added
 
 - **Video generation mock lifecycle**: added `POST /v1/video/generations` and `GET /v1/video/generations/{job_id}` with deterministic async polling transitions (`queued -> running -> succeeded`)

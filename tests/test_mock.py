@@ -304,6 +304,54 @@ async def test_video_generation_not_found():
     assert "error" in r.json()
 
 
+@pytest.mark.asyncio
+async def test_video_generation_async_failed_terminal_state():
+    """Test async video generation can end in failed terminal state."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/v1/video/generations",
+            json={"model": "video-gen-1", "prompt": "Fail case", "async": True},
+            headers={"X-Mock-Video-Terminal": "failed"},
+        )
+        assert create_resp.status_code == 202
+        job_id = create_resp.json()["id"]
+
+        await client.get(f"/v1/video/generations/{job_id}")  # queued/running
+        poll_terminal = await client.get(f"/v1/video/generations/{job_id}")
+        assert poll_terminal.status_code == 200
+        payload = poll_terminal.json()
+        assert payload["status"] == "failed"
+        assert payload["terminal_state"] == "failed"
+        assert "error" in payload
+        assert payload["error"]["code"] == "video_generation_failed"
+
+        # terminal should remain stable on subsequent polls
+        poll_again = await client.get(f"/v1/video/generations/{job_id}")
+        assert poll_again.status_code == 200
+        assert poll_again.json()["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_video_generation_async_cancelled_terminal_state():
+    """Test async video generation can end in cancelled terminal state."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/v1/video/generations",
+            json={"model": "video-gen-1", "prompt": "Cancel case", "async": True, "terminal_state": "cancelled"},
+        )
+        assert create_resp.status_code == 202
+        job_id = create_resp.json()["id"]
+
+        await client.get(f"/v1/video/generations/{job_id}")  # queued/running
+        poll_terminal = await client.get(f"/v1/video/generations/{job_id}")
+        assert poll_terminal.status_code == 200
+        payload = poll_terminal.json()
+        assert payload["status"] == "cancelled"
+        assert payload["terminal_state"] == "cancelled"
+        assert "cancellation" in payload
+        assert payload["cancellation"]["reason"] == "mock_cancelled_for_test"
+
+
 # --- Test control headers (X-Mock-*) for integration tests ---
 
 

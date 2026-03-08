@@ -297,6 +297,7 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     # In-memory async job registry for deterministic polling simulation.
     # Key: job id, Value: {"status": str, "polls": int, "created_at": str, "provider": str}
     video_jobs: dict[str, dict[str, Any]] = {}
+    terminal_states = {"succeeded", "failed", "cancelled"}
 
     # Build route map: path -> (provider_id, api_style)
     route_map: dict[str, tuple[str, str]] = {}
@@ -573,6 +574,13 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         model = str(body.get("model", "video-gen-1"))
         provider = str(body.get("provider", "mock"))
         prompt = str(body.get("prompt", "mock video prompt"))
+        requested_terminal = (
+            request.headers.get("x-mock-video-terminal")
+            or body.get("terminal_state")
+            or "succeeded"
+        )
+        if requested_terminal not in terminal_states:
+            requested_terminal = "succeeded"
 
         if not async_mode:
             return {
@@ -596,6 +604,7 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             "provider": provider,
             "model": model,
             "prompt": prompt,
+            "terminal_state": requested_terminal,
             "created_at": datetime.now(UTC).isoformat(),
         }
         return JSONResponse(
@@ -622,10 +631,12 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             )
 
         job["polls"] = int(job.get("polls", 0)) + 1
-        if job["polls"] == 1:
-            job["status"] = "running"
-        elif job["polls"] >= 2:
-            job["status"] = "succeeded"
+        current_status = str(job.get("status", "queued"))
+        if current_status not in terminal_states:
+            if job["polls"] == 1:
+                job["status"] = "running"
+            elif job["polls"] >= 2:
+                job["status"] = job.get("terminal_state", "succeeded")
 
         response: dict[str, Any] = {
             "id": job_id,
@@ -635,6 +646,7 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             "created_at": job["created_at"],
             "updated_at": datetime.now(UTC).isoformat(),
             "polls": job["polls"],
+            "terminal_state": job.get("terminal_state", "succeeded"),
         }
         if job["status"] == "succeeded":
             response["output"] = {
@@ -643,6 +655,16 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
                 "duration_seconds": 4,
                 "completed_at": datetime.now(UTC).isoformat(),
                 "elapsed_ms": int((time.time() * 1000) % 100000),
+            }
+        elif job["status"] == "failed":
+            response["error"] = {
+                "code": "video_generation_failed",
+                "message": "Mock video generation failed at terminal state",
+            }
+        elif job["status"] == "cancelled":
+            response["cancellation"] = {
+                "reason": "mock_cancelled_for_test",
+                "cancelled_at": datetime.now(UTC).isoformat(),
             }
         return response
 

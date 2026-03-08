@@ -45,6 +45,8 @@ For integration tests, requests can include these headers to control mock behavi
 | X-Mock-Status | Force HTTP error status (400-599) | 429, 500, 503 |
 | X-Mock-Content | Override response content for this request | Custom text |
 | X-Mock-Tool-Calls | Return tool_calls instead of text | 1, true, yes |
+| X-Mock-Invalid-Content-Type | Inject `text/plain` payload for robustness tests | 1 |
+| X-Mock-Video-Terminal | Force async video terminal state (`succeeded`/`failed`/`cancelled`) | failed |
 
 ## Endpoints
 
@@ -53,10 +55,29 @@ For integration tests, requests can include these headers to control mock behavi
 - `POST /v1/audio/transcriptions` - STT (OpenAI Whisper format), returns `{"text": "..."}`
 - `POST /v1/audio/speech` - TTS (OpenAI format), returns `audio/mpeg` bytes
 - `POST /v2/rerank` - Rerank (Cohere v2 format), request `{query, documents, top_n}`, returns `{results, id, meta}`
+- `POST /v1/video/generations` - Video generation (sync + async polling)
+- `GET /v1/video/generations/{job_id}` - Poll async video generation status
 - `POST /mcp` - MCP JSON-RPC (`tools/list`, `tools/call`, `capabilities`, `initialize`)
 - `GET /health` - Health check
 - `GET /status` - Status with manifest sync metadata
 - `GET /providers` - Provider contracts from manifests (provider_id, api_style, chat_path)
+
+### Video Generation Lifecycle
+
+Async video generation jobs follow a deterministic state machine:
+
+`queued -> running -> terminal`
+
+Terminal states:
+
+- `succeeded` (default): returns `output` with mock mp4 metadata
+- `failed`: returns `error` payload (`video_generation_failed`)
+- `cancelled`: returns `cancellation` payload (`mock_cancelled_for_test`)
+
+Controls:
+
+- request body `terminal_state` or header `X-Mock-Video-Terminal`
+- unknown values fall back to `succeeded`
 
 ## Using with ai-lib-python
 
