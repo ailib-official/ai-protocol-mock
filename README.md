@@ -60,7 +60,7 @@ For integration tests, requests can include these headers to control mock behavi
 - `POST /mcp` - MCP JSON-RPC (`tools/list`, `tools/call`, `capabilities`, `initialize`)
 - `GET /health` - Health check
 - `GET /status` - Status with manifest sync metadata
-- `GET /providers` - Provider contracts from manifests (provider_id, api_style, chat_path)
+- `GET /providers` - Provider contracts from manifests (provider_id, api_style, chat_path, capability_profile summary)
 
 ### Video Generation Lifecycle
 

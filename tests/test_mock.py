@@ -12,6 +12,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from ai_protocol_mock.main import app
+from ai_protocol_mock.mocks.http_provider import get_provider_contracts
 
 transport = ASGITransport(app=app)
 
@@ -54,6 +55,41 @@ async def test_providers():
         assert "provider_id" in p
         assert "api_style" in p
         assert "chat_path" in p
+        assert "has_capability_profile" in p
+        assert "capability_profile_phase" in p
+        assert "has_ios_dimensions" in p
+
+    assert isinstance(next(iter(providers)), dict)
+
+
+def test_provider_contracts_capability_profile_summary(tmp_path: Path):
+    """Contracts should expose capability_profile summary when present."""
+    providers_dir = tmp_path / "v2" / "providers"
+    providers_dir.mkdir(parents=True, exist_ok=True)
+    (providers_dir / "openai.yaml").write_text(
+        """
+id: openai
+name: OpenAI
+endpoint:
+  base_url: "https://api.openai.com/v1"
+  chat: "/chat/completions"
+capability_profile:
+  phase: "ios_v1"
+  inputs:
+    modalities: ["text"]
+  outcomes:
+    types: ["text_completion"]
+  systems:
+    requires: ["search"]
+        """.strip(),
+        encoding="utf-8",
+    )
+    contracts = get_provider_contracts(tmp_path)
+    openai = next((item for item in contracts if item.get("provider_id") == "openai"), None)
+    assert openai is not None
+    assert openai["has_capability_profile"] is True
+    assert openai["capability_profile_phase"] == "ios_v1"
+    assert openai["has_ios_dimensions"] is True
 
 
 @pytest.mark.asyncio

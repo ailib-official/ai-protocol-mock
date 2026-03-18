@@ -55,7 +55,18 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
     # For simplicity, we try common patterns
     known_files = {
         "v1/providers": ["openai.yaml", "anthropic.yaml"],
-        "v2/providers": ["openai.yaml", "anthropic.yaml", "cohere.yaml", "jina.yaml"],
+        "v2/providers": [
+            "openai.yaml",
+            "anthropic.yaml",
+            "google.yaml",
+            "deepseek.yaml",
+            "qwen.yaml",
+            "doubao.yaml",
+            "cohere.yaml",
+            "moonshot.yaml",
+            "zhipu.yaml",
+            "jina.yaml",
+        ],
         "v1/models": [],  # May be empty or we discover from providers
         "schemas": [
             "v1.json",
@@ -64,6 +75,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
             "v2/endpoint.json",
             "v2/capabilities.json",
             "v2/errors.json",
+            "v2/capability-profile.json",
         ],
     }
     # Flatten: also try v2/ subdir
@@ -82,6 +94,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
             "context-policy.json",
             "pricing.json",
             "message-roles.json",
+            "capability-profile.json",
         ],
     }
     success, fail = 0, 0

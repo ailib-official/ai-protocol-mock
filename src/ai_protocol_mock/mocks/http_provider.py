@@ -70,12 +70,23 @@ def get_provider_contracts(manifest_dir: Path | None = None) -> list[dict[str, A
     for pid, m in manifests.items():
         style = _detect_api_style(m)
         chat_path = _get_chat_path(m)
+        capability_profile = m.get("capability_profile")
+        has_capability_profile = isinstance(capability_profile, dict)
+        phase = capability_profile.get("phase") if has_capability_profile else None
+        has_ios_dimensions = False
+        if has_capability_profile:
+            has_ios_dimensions = any(
+                key in capability_profile for key in ("inputs", "outcomes", "systems")
+            )
         contracts.append(
             {
                 "provider_id": pid,
                 "api_style": "openai_compatible" if style == "openai" else "anthropic_messages",
                 "chat_path": chat_path,
                 "name": m.get("name", pid),
+                "has_capability_profile": has_capability_profile,
+                "capability_profile_phase": phase,
+                "has_ios_dimensions": has_ios_dimensions,
             }
         )
     if not contracts:
