@@ -31,7 +31,7 @@ docker-compose up -d
 |----------|---------|-------------|
 | HTTP_PORT | 4010 | Port for HTTP and MCP (MCP at /mcp) |
 | MANIFEST_DIR | manifests | Directory for synced manifests |
-| MANIFEST_SYNC_URL | https://raw.githubusercontent.com/hiddenpath/ai-protocol/main/ | Source for manifest sync |
+| MANIFEST_SYNC_URL | https://raw.githubusercontent.com/ailib-official/ai-protocol/main/ | Source for manifest sync |
 | RESPONSE_DELAY | 0 | Delay in seconds before responding |
 | ERROR_RATE | 0 | Probability (0-1) of returning 429/500/503 |
 | MOCK_CONTENT | Mock response from ai-protocol-mock | Default response content |
