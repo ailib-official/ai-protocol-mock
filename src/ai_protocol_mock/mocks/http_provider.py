@@ -13,96 +13,40 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import yaml
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ai_protocol_mock.config import config
-
-
-def _load_manifests(manifest_dir: Path) -> dict[str, dict[str, Any]]:
-    """Load all provider manifests from directory. Supports v1 and v2 providers."""
-    manifests: dict[str, dict[str, Any]] = {}
-    for rel in ["v1/providers", "v2/providers", "providers"]:
-        providers_dir = manifest_dir / rel
-        if not providers_dir.exists():
-            continue
-        for f in providers_dir.glob("*.yaml"):
-            try:
-                data = yaml.safe_load(f.read_text(encoding="utf-8"))
-                if data and isinstance(data, dict):
-                    pid = data.get("id", f.stem)
-                    manifests[pid] = data
-            except Exception:
-                pass
-    return manifests
-
-
-def _get_chat_path(manifest: dict[str, Any]) -> str:
-    """Extract chat endpoint path from manifest. Supports v1 and v2 formats."""
-    ep = manifest.get("endpoints") or manifest.get("endpoint") or {}
-    if not isinstance(ep, dict):
-        return "/chat/completions"
-    chat = ep.get("chat")
-    if isinstance(chat, dict):
-        return chat.get("path", "/chat/completions") or "/chat/completions"
-    if isinstance(chat, str) and chat:
-        return chat if chat.startswith("/") else f"/{chat}"
-    return "/chat/completions"
-
-
-def _detect_api_style(manifest: dict[str, Any]) -> str:
-    """Detect API style from manifest. Returns 'openai' or 'anthropic'."""
-    chat_path = _get_chat_path(manifest)
-    # Anthropic uses /messages, OpenAI uses /chat/completions
-    if "/messages" in chat_path or chat_path.endswith("messages"):
-        return "anthropic"
-    return "openai"
+from ai_protocol_mock.engine.resolver import ContractResolver
 
 
 def get_provider_contracts(manifest_dir: Path | None = None) -> list[dict[str, Any]]:
-    """Build provider contract list from manifests for runtime compatibility.
-    Returns list of {provider_id, api_style, chat_path, name} per provider.
-    """
+    """Build provider contract list from manifests for runtime compatibility."""
     mdir = manifest_dir or config.MANIFEST_DIR
-    manifests = _load_manifests(mdir)
-    contracts = []
-    for pid, m in manifests.items():
-        style = _detect_api_style(m)
-        chat_path = _get_chat_path(m)
-        capability_profile = m.get("capability_profile")
-        has_capability_profile = isinstance(capability_profile, dict)
-        phase = capability_profile.get("phase") if has_capability_profile else None
-        has_ios_dimensions = False
-        if has_capability_profile:
-            has_ios_dimensions = any(key in capability_profile for key in ("inputs", "outcomes", "systems"))
-        contracts.append(
-            {
-                "provider_id": pid,
-                "api_style": "openai_compatible" if style == "openai" else "anthropic_messages",
-                "chat_path": chat_path,
-                "name": m.get("name", pid),
-                "has_capability_profile": has_capability_profile,
-                "capability_profile_phase": phase,
-                "has_ios_dimensions": has_ios_dimensions,
-            }
-        )
-    if not contracts:
-        contracts = [
-            {
-                "provider_id": "openai",
-                "api_style": "openai_compatible",
-                "chat_path": "/chat/completions",
-                "name": "OpenAI",
-            },
-            {
-                "provider_id": "anthropic",
-                "api_style": "anthropic_messages",
-                "chat_path": "/messages",
-                "name": "Anthropic",
-            },
-        ]
-    return contracts
+    resolver = ContractResolver(mdir)
+    contracts = resolver.list_provider_summaries()
+    if contracts:
+        return contracts
+    return [
+        {
+            "provider_id": "openai",
+            "api_style": "openai_compatible",
+            "chat_path": "/chat/completions",
+            "name": "OpenAI",
+            "has_capability_profile": False,
+            "capability_profile_phase": None,
+            "has_ios_dimensions": False,
+        },
+        {
+            "provider_id": "anthropic",
+            "api_style": "anthropic_messages",
+            "chat_path": "/messages",
+            "name": "Anthropic",
+            "has_capability_profile": False,
+            "capability_profile_phase": None,
+            "has_ios_dimensions": False,
+        },
+    ]
 
 
 def _openai_response(content: str, model: str, stream: bool, usage: dict | None = None) -> dict | list[dict]:
@@ -302,18 +246,25 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
     """Create FastAPI router with manifest-driven HTTP mock routes."""
     router = APIRouter()
     mdir = manifest_dir or config.MANIFEST_DIR
-    manifests = _load_manifests(mdir)
+    resolver = ContractResolver(mdir)
+    manifests = dict(resolver.manifest_registry.items())
 
     # In-memory async job registry for deterministic polling simulation.
     # Key: job id, Value: {"status": str, "polls": int, "created_at": str, "provider": str}
     video_jobs: dict[str, dict[str, Any]] = {}
     terminal_states = {"succeeded", "failed", "cancelled"}
 
-    # Build route map: path -> (provider_id, api_style)
+    # Build route map: path -> (provider_id, response_handler)
     route_map: dict[str, tuple[str, str]] = {}
-    for pid, m in manifests.items():
-        style = _detect_api_style(m)
-        chat_path = _get_chat_path(m)
+    for pid, _m in manifests.items():
+        try:
+            res = resolver.resolve(pid)
+        except KeyError:
+            continue
+        if res.source == "manifest_rerank":
+            continue
+        style = res.response_handler()
+        chat_path = res.chat_path
         # Register both bare path and /v1 prefix (OpenAI/Anthropic clients use /v1/...)
         for prefix in ("", "/v1"):
             full_path = f"{prefix}{chat_path}" if prefix else chat_path

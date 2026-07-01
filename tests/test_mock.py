@@ -73,6 +73,9 @@ name: OpenAI
 endpoint:
   base_url: "https://api.openai.com/v1"
   chat: "/chat/completions"
+streaming:
+  decoder:
+    strategy: openai_chat
 capability_profile:
   phase: "ios_v1"
   inputs:
