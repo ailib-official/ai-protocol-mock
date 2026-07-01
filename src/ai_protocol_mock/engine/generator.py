@@ -154,9 +154,7 @@ def _openai_plain_response(ctx: ChatMockContext, usage: dict[str, Any]) -> dict[
         "object": "chat.completion",
         "created": 1699012345,
         "model": ctx.model,
-        "choices": [
-            {"index": 0, "message": {"role": "assistant", "content": ctx.content}, "finish_reason": "stop"}
-        ],
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": ctx.content}, "finish_reason": "stop"}],
         "usage": usage,
     }
 
@@ -170,9 +168,7 @@ def _openai_reasoning_response(ctx: ChatMockContext) -> dict[str, Any] | list[di
                 "object": "chat.completion.chunk",
                 "created": 1699012345,
                 "model": ctx.model,
-                "choices": [
-                    {"index": 0, "delta": {"reasoning_content": _REASONING_TEXT}, "finish_reason": None}
-                ],
+                "choices": [{"index": 0, "delta": {"reasoning_content": _REASONING_TEXT}, "finish_reason": None}],
             },
             {
                 "id": "chatcmpl-mock",
@@ -386,9 +382,7 @@ def _anthropic_plain_response(ctx: ChatMockContext, usage: dict[str, Any]) -> di
             {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
         ]
         for char in ctx.content:
-            chunks.append(
-                {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": char}}
-            )
+            chunks.append({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": char}})
         chunks.extend([{"type": "content_block_stop", "index": 0}, {"type": "message_stop"}])
         return chunks
     return {
