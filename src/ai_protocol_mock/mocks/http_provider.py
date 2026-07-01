@@ -75,9 +75,7 @@ def get_provider_contracts(manifest_dir: Path | None = None) -> list[dict[str, A
         phase = capability_profile.get("phase") if has_capability_profile else None
         has_ios_dimensions = False
         if has_capability_profile:
-            has_ios_dimensions = any(
-                key in capability_profile for key in ("inputs", "outcomes", "systems")
-            )
+            has_ios_dimensions = any(key in capability_profile for key in ("inputs", "outcomes", "systems"))
         contracts.append(
             {
                 "provider_id": pid,
@@ -158,6 +156,7 @@ def _openai_tool_call_response(
     if tool_args is None:
         tool_args = {"city": "Tokyo"}
     import json
+
     return {
         "id": "chatcmpl-mock",
         "object": "chat.completion",
@@ -342,7 +341,9 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
                 if 400 <= status_code < 600:
                     return JSONResponse(
                         status_code=status_code,
-                        content={"error": {"message": f"Mock error (X-Mock-Status={status_code})", "type": "mock_error"}},
+                        content={
+                            "error": {"message": f"Mock error (X-Mock-Status={status_code})", "type": "mock_error"}
+                        },
                     )
             except ValueError:
                 pass
@@ -427,9 +428,11 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             if stream:
                 # Tool calls in streaming: emit as single chunk for simplicity
                 import json
+
                 def gen():
                     yield f"data: {json.dumps(resp)}\n\n"
                     yield "data: [DONE]\n\n"
+
                 return StreamingResponse(gen(), media_type="text/event-stream")
             return resp
 
@@ -533,9 +536,7 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             await asyncio.sleep(config.RESPONSE_DELAY)
         try:
             body = (
-                await request.json()
-                if request.headers.get("content-type", "").startswith("application/json")
-                else {}
+                await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
             )
         except Exception:
             body = {}
@@ -543,10 +544,7 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             body = {}
         documents = body.get("documents", [])
         top_n = body.get("top_n", len(documents))
-        results = [
-            {"index": i, "relevance_score": 1.0 - (i * 0.1)}
-            for i in range(min(top_n, len(documents)))
-        ]
+        results = [{"index": i, "relevance_score": 1.0 - (i * 0.1)} for i in range(min(top_n, len(documents)))]
         # Cohere v2 format: results, id, meta (api_version, billed_units)
         return {
             "results": results,
@@ -572,9 +570,7 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
             await asyncio.sleep(config.RESPONSE_DELAY)
         try:
             body = (
-                await request.json()
-                if request.headers.get("content-type", "").startswith("application/json")
-                else {}
+                await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
             )
         except Exception:
             body = {}
@@ -585,11 +581,7 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         model = str(body.get("model", "video-gen-1"))
         provider = str(body.get("provider", "mock"))
         prompt = str(body.get("prompt", "mock video prompt"))
-        requested_terminal = (
-            request.headers.get("x-mock-video-terminal")
-            or body.get("terminal_state")
-            or "succeeded"
-        )
+        requested_terminal = request.headers.get("x-mock-video-terminal") or body.get("terminal_state") or "succeeded"
         if requested_terminal not in terminal_states:
             requested_terminal = "succeeded"
 

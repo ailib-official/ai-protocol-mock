@@ -188,7 +188,11 @@ async def test_http_mock_accepts_tool_messages():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.post(
             "/v1/chat/completions",
-            json={"model": "gpt-4o", "messages": messages, "tools": [{"type": "function", "function": {"name": "get_weather"}}]},
+            json={
+                "model": "gpt-4o",
+                "messages": messages,
+                "tools": [{"type": "function", "function": {"name": "get_weather"}}],
+            },
         )
     assert r.status_code == 200
     data = r.json()
