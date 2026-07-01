@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-## 0.1.9 - 2026-03-08
+## [1.0.0] - 2026-07-01
+
+### Milestone
+
+- **Wave-5 v1.0.0**: mock server aligned with PT-073g runtime releases; semver 1.0.0 for cross-runtime test matrix.
+
+## 0.1.11 - 2026-05-07
 
 ### Added
 

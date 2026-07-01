@@ -16,7 +16,7 @@ from pathlib import Path
 import httpx
 
 # Default sync URL (ai-protocol main)
-DEFAULT_SYNC_URL = "https://raw.githubusercontent.com/hiddenpath/ai-protocol/main/"
+DEFAULT_SYNC_URL = "https://raw.githubusercontent.com/ailib-official/ai-protocol/main/"
 MANIFEST_DIR = Path(__file__).resolve().parents[1] / "manifests"
 
 
@@ -24,7 +24,7 @@ def _resolve_sync_url(url: str, tag: str | None) -> str:
     """Use tag/branch if provided. E.g. --tag v0.7.1 pins to that release."""
     if not tag:
         return url.rstrip("/")
-    return f"https://raw.githubusercontent.com/hiddenpath/ai-protocol/{tag}/"
+    return f"https://raw.githubusercontent.com/ailib-official/ai-protocol/{tag}/"
 
 
 # Paths to sync (relative to repo root)
@@ -127,7 +127,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
 
     # Discover provider yamls from GitHub API (v1 and v2 providers)
     if rel_path == "v1/providers":
-        api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v1/providers"
+        api_url = "https://api.github.com/repos/ailib-official/ai-protocol/contents/v1/providers"
         try:
             r = httpx.get(api_url, timeout=15, trust_env=False)
             if r.status_code == 200:
@@ -146,7 +146,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
             print(f"  GitHub API discovery failed: {e}", file=sys.stderr)
 
     if rel_path == "v2/providers":
-        api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v2/providers"
+        api_url = "https://api.github.com/repos/ailib-official/ai-protocol/contents/v2/providers"
         try:
             r = httpx.get(api_url, timeout=15, trust_env=False)
             if r.status_code == 200:
@@ -166,7 +166,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
 
     # Discover v1/models from GitHub API
     if rel_path == "v1/models":
-        api_url = "https://api.github.com/repos/hiddenpath/ai-protocol/contents/v1/models"
+        api_url = "https://api.github.com/repos/ailib-official/ai-protocol/contents/v1/models"
         try:
             r = httpx.get(api_url, timeout=15, trust_env=False)
             if r.status_code == 200:
