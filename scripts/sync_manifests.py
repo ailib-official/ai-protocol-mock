@@ -16,7 +16,7 @@ from pathlib import Path
 import httpx
 
 # Default sync URL (ai-protocol main)
-DEFAULT_SYNC_URL = "https://raw.githubusercontent.com/ailib-official/ai-protocol/main/"
+DEFAULT_SYNC_URL = "https://raw.githubusercontent.com/ailib-official/ai-protocol/v1.0.0/"
 MANIFEST_DIR = Path(__file__).resolve().parents[1] / "manifests"
 
 
@@ -31,6 +31,7 @@ def _resolve_sync_url(url: str, tag: str | None) -> str:
 SYNC_PATHS = [
     "v1/providers",
     "v2/providers",
+    "v2/contracts",
     "v1/models",
     "schemas",
 ]
@@ -163,6 +164,25 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
                             fail += 1
         except Exception as e:
             print(f"  GitHub API discovery for v2 providers failed: {e}", file=sys.stderr)
+
+    if rel_path == "v2/contracts":
+        api_url = "https://api.github.com/repos/ailib-official/ai-protocol/contents/v2/contracts"
+        try:
+            r = httpx.get(api_url, timeout=15, trust_env=False)
+            if r.status_code == 200:
+                for item in r.json():
+                    if item.get("type") == "file" and item.get("name", "").endswith((".yaml", ".yml")):
+                        name = item["name"]
+                        url = f"{base}/v2/contracts/{name}"
+                        dest = MANIFEST_DIR / "v2" / "contracts" / name
+                        if dest.exists() and not force:
+                            success += 1
+                        elif download_file(url, dest):
+                            success += 1
+                        else:
+                            fail += 1
+        except Exception as e:
+            print(f"  GitHub API discovery for v2 contracts failed: {e}", file=sys.stderr)
 
     # Discover v1/models from GitHub API
     if rel_path == "v1/models":
