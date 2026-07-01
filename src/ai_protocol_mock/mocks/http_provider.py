@@ -17,6 +17,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ai_protocol_mock.config import config
+from ai_protocol_mock.engine.errors import apply_mock_error, is_stream_interrupt
+from ai_protocol_mock.engine.generator import generate_chat_response, openai_stream_chunks, parse_chat_context
 from ai_protocol_mock.engine.resolver import ContractResolver
 
 
@@ -314,6 +316,20 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
 
     async def handle_chat(request: Request, path: str = ""):
 
+        try:
+            body = (
+                await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+            )
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        stream = bool(body.get("stream", False))
+
+        mock_error = apply_mock_error(request, stream=stream)
+        if mock_error is not None and not is_stream_interrupt(mock_error):
+            return mock_error
+
         controlled = await _apply_test_controls(request)
         if controlled is not None:
             return controlled
@@ -326,90 +342,52 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         if config.RESPONSE_DELAY > 0:
             await asyncio.sleep(config.RESPONSE_DELAY)
 
-        try:
-            body = (
-                await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
-            )
-        except Exception:
-            body = {}
-        if not isinstance(body, dict):
-            body = {}
-        model = body.get("model", "gpt-4o")
-        stream = body.get("stream", False)
-        content = request.headers.get("x-mock-content") or config.MOCK_CONTENT
-        mock_tool_calls = request.headers.get("x-mock-tool-calls", "").lower() in ("1", "true", "yes")
-
         # Find matching style by path
-        style = "openai"
+        style: str = "openai"
         req_path = path or str(request.url.path)
         for route_path, (_, s) in route_map.items():
             if req_path == route_path or req_path.endswith(route_path):
                 style = s
                 break
-        # Infer from path if not in map
         if "/messages" in req_path:
             style = "anthropic"
         elif ":generateContent" in req_path or ":streamGenerateContent" in req_path:
             style = "gemini"
 
-        if mock_tool_calls:
-            if style == "anthropic":
-                resp = _anthropic_tool_call_response(model=model)
-            elif style == "gemini":
-                resp = {
-                    "candidates": [
-                        {
-                            "index": 0,
-                            "content": {
-                                "parts": [
-                                    {
-                                        "functionCall": {
-                                            "name": "get_weather",
-                                            "args": {"city": "Tokyo"},
-                                        }
-                                    }
-                                ]
-                            },
-                            "finishReason": "STOP",
-                        }
-                    ]
-                }
-            else:
-                resp = _openai_tool_call_response(model=model)
-            if stream:
-                # Tool calls in streaming: emit as single chunk for simplicity
-                import json
-
-                def gen():
-                    yield f"data: {json.dumps(resp)}\n\n"
-                    yield "data: [DONE]\n\n"
-
-                return StreamingResponse(gen(), media_type="text/event-stream")
-            return resp
-
-        usage = (
-            {"input_tokens": 10, "output_tokens": len(content.split())}
-            if style == "anthropic"
-            else {
-                "prompt_tokens": 10,
-                "completion_tokens": len(content.split()),
-                "total_tokens": 10 + len(content.split()),
-            }
+        ctx = parse_chat_context(
+            style=style,  # type: ignore[arg-type]
+            headers={k.lower(): v for k, v in request.headers.items()},
+            body=body,
+            default_content=config.MOCK_CONTENT,
         )
-        if style == "anthropic":
-            resp = _anthropic_response(content, model, stream, usage)
-        elif style == "gemini":
-            resp = _gemini_response(content, model, stream)
-        else:
-            resp = _openai_response(content, model, stream, usage)
+        resp = generate_chat_response(ctx)
+
+        if is_stream_interrupt(mock_error):
+            if style == "openai" and isinstance(resp, list):
+                resp = openai_stream_chunks(ctx, resp)
+            elif style == "openai":
+                resp = openai_stream_chunks(
+                    ctx,
+                    [
+                        {
+                            "id": "chatcmpl-mock",
+                            "object": "chat.completion.chunk",
+                            "created": 1699012345,
+                            "model": ctx.model,
+                            "choices": [{"index": 0, "delta": {"content": "x"}, "finish_reason": None}],
+                        }
+                    ],
+                )
 
         if stream:
             import json
 
             def gen():
-                for chunk in resp:
+                chunks = resp if isinstance(resp, list) else [resp]
+                for chunk in chunks:
                     yield f"data: {json.dumps(chunk)}\n\n"
-                yield "data: [DONE]\n\n"
+                if not is_stream_interrupt(mock_error):
+                    yield "data: [DONE]\n\n"
 
             return StreamingResponse(gen(), media_type="text/event-stream")
         return resp
