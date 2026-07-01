@@ -31,7 +31,8 @@ docker-compose up -d
 |----------|---------|-------------|
 | HTTP_PORT | 4010 | Port for HTTP and MCP (MCP at /mcp) |
 | MANIFEST_DIR | manifests | Directory for synced manifests |
-| MANIFEST_SYNC_URL | https://raw.githubusercontent.com/ailib-official/ai-protocol/main/ | Source for manifest sync |
+| MANIFEST_SYNC_URL | https://raw.githubusercontent.com/ailib-official/ai-protocol/v1.0.0/ | Source for manifest sync (pin `v1.0.0` for reproducible CI) |
+| AI_PROTOCOL_TAG | (optional) | Convenience alias; docker-compose sets `v1.0.0` |
 | RESPONSE_DELAY | 0 | Delay in seconds before responding |
 | ERROR_RATE | 0 | Probability (0-1) of returning 429/500/503 |
 | MOCK_CONTENT | Mock response from ai-protocol-mock | Default response content |
@@ -44,7 +45,11 @@ For integration tests, requests can include these headers to control mock behavi
 |--------|-------------|---------|
 | X-Mock-Status | Force HTTP error status (400-599) | 429, 500, 503 |
 | X-Mock-Content | Override response content for this request | Custom text |
-| X-Mock-Tool-Calls | Return tool_calls instead of text | 1, true, yes |
+| X-Mock-Tool-Calls | Return tool_calls instead of text; `parallel` or `recursive` for multi-tool scenarios | 1, parallel, recursive |
+| X-Mock-Reasoning | Include reasoning/thinking blocks in chat response | true |
+| X-Mock-Error | Inject standard errors (`context_overflow`, `content_filter`, `rate_limit`, `stream_interrupt`) | rate_limit |
+| X-Mock-Usage-Format | Enrich usage payload (`openai` or `anthropic` shape) | openai |
+| X-Mock-Tool-Depth | Max recursive tool-call rounds (with `recursive`) | 2 |
 | X-Mock-Invalid-Content-Type | Inject `text/plain` payload for robustness tests | 1 |
 | X-Mock-Video-Terminal | Force async video terminal state (`succeeded`/`failed`/`cancelled`) | failed |
 
@@ -148,10 +153,20 @@ python scripts/sync_manifests.py [--force] [--url URL] [--tag REF]
 ```
 
 - `--force` - Overwrite existing files
-- `--tag REF` - Pin to a specific ai-protocol ref (e.g. `v0.7.1`, `main`)
-- `--url URL` - Custom base URL (default: ai-protocol main)
+- `--tag REF` - Pin to a specific ai-protocol ref (e.g. `v1.0.0`, `main`; **default URL pins `v1.0.0`**)
+- `--url URL` - Custom base URL (overrides default pinned release)
 
-Run before starting the server to ensure manifests are up to date. Docker Compose runs sync automatically on startup. A GitHub Action runs sync daily to validate the script.
+Run before starting the server to ensure manifests are up to date. **CI and docker-compose should use `--tag v1.0.0`** (or equivalent URL) so integration tests match the v1.0.0 protocol matrix.
+
+## v1.0 migration (from 0.1.x)
+
+| 0.1.x | v1.0+ |
+|-------|-------|
+| Path heuristics (`/messages` → Anthropic) | `ContractResolver` + manifest `streaming.decoder.strategy` / `ProviderContract` |
+| Hardcoded JSON shapes only | `X-Mock-*` generative branches (reasoning, tools, structured output) |
+| `main` manifest sync | Pin **`ai-protocol@v1.0.0`** in CI and `sync_manifests.py` |
+
+Breaking changes are documented in CHANGELOG; PyPI **1.0.1** ships after four-runtime Mock Integration CI is green (MOCK-001-R4).
 
 ## Development
 

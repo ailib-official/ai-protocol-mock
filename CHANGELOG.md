@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Changed (MOCK-001-R1/R2, merged PR #2)
+
+- **Protocol-driven resolver**: `ManifestRegistry` + `ContractResolver` replace path heuristics for `/providers` and chat routing.
+- **Generative mock engine**: `X-Mock-Reasoning`, structured `response_format`, parallel/recursive tool calls, and standard error injection via `X-Mock-Error`.
+- **Default manifest pin**: `MANIFEST_SYNC_URL` and docker-compose target `ai-protocol@v1.0.0`.
+
+### Migration
+
+- Pin `sync_manifests.py --tag v1.0.0` in CI; see README **v1.0 migration**.
+
 ## [1.0.0] - 2026-07-01
 
 ### Milestone
