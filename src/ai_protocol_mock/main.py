@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from ai_protocol_mock import __version__
 from ai_protocol_mock.config import config
 from ai_protocol_mock.mocks.http_provider import create_http_router, get_provider_contracts
 from ai_protocol_mock.mocks.mcp_server import create_mcp_router
@@ -26,7 +27,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="ai-protocol-mock",
         description="Unified mock server for AI-Protocol runtimes",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
     )
     app.include_router(create_http_router())
@@ -49,7 +50,7 @@ def create_app() -> FastAPI:
         meta = {}
         if meta_file.exists():
             meta = json.loads(meta_file.read_text())
-        return {"status": "ok", "manifest_sync": meta, "version": "0.1.0"}
+        return {"status": "ok", "manifest_sync": meta, "version": __version__}
 
     @app.get("/providers")
     async def providers():

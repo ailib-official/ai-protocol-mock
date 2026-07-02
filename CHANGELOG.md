@@ -1,18 +1,30 @@
 # Changelog
 
-## Unreleased
+## [1.0.1] - 2026-07-02
 
-### Changed (MOCK-001-R1/R2, merged PR #2)
+### Added (MOCK-001-R2b)
+
+- **StreamEncoder** (`engine/stream.py`): SSE framing driven by manifest `streaming.decoder` (`sse`, `anthropic_sse`, `gemini_sse`).
+- **event_map parity**: OpenAI / Anthropic stream chunks align with manifest `event_map` emit types; Anthropic uses `event:` lines without OpenAI `[DONE]`.
+- **Resolver-wired streaming**: `handle_chat` resolves provider via `ContractResolver` + `route_map` (path heuristics removed).
+
+### Changed (MOCK-001-R4)
+
+- Version strings aligned (`pyproject.toml`, `__version__`, `/status`, FastAPI metadata).
+- Gemini streaming no longer emits OpenAI `[DONE]` when manifest has no `done_signal`.
+
+## [1.0.0] - 2026-07-01
+
+### Changed (MOCK-001-R1/R2/R3, merged PR #2–#3)
 
 - **Protocol-driven resolver**: `ManifestRegistry` + `ContractResolver` replace path heuristics for `/providers` and chat routing.
 - **Generative mock engine**: `X-Mock-Reasoning`, structured `response_format`, parallel/recursive tool calls, and standard error injection via `X-Mock-Error`.
+- **Four-runtime CI**: mock-integration jobs pin `ai-protocol@v1.0.0`.
 - **Default manifest pin**: `MANIFEST_SYNC_URL` and docker-compose target `ai-protocol@v1.0.0`.
 
 ### Migration
 
 - Pin `sync_manifests.py --tag v1.0.0` in CI; see README **v1.0 migration**.
-
-## [1.0.0] - 2026-07-01
 
 ### Milestone
 

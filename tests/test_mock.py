@@ -167,7 +167,7 @@ async def test_http_mock_gemini_stream_generate_content():
     assert r.status_code == 200
     assert "text/event-stream" in r.headers.get("content-type", "")
     assert "data: " in r.text
-    assert "[DONE]" in r.text
+    assert "candidates" in r.text
 
 
 @pytest.mark.asyncio
