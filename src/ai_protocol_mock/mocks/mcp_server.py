@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import json
 
-from ai_protocol_mock import __version__
-
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+
+from ai_protocol_mock import __version__
 
 # Default tools for mock
 DEFAULT_TOOLS = [
