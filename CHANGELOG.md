@@ -1,17 +1,12 @@
 # Changelog
 
-## [1.0.1] - 2026-07-02
+## Unreleased
 
 ### Added (MOCK-001-R2b)
 
 - **StreamEncoder** (`engine/stream.py`): SSE framing driven by manifest `streaming.decoder` (`sse`, `anthropic_sse`, `gemini_sse`).
 - **event_map parity**: OpenAI / Anthropic stream chunks align with manifest `event_map` emit types; Anthropic uses `event:` lines without OpenAI `[DONE]`.
 - **Resolver-wired streaming**: `handle_chat` resolves provider via `ContractResolver` + `route_map` (path heuristics removed).
-
-### Changed (MOCK-001-R4)
-
-- Version strings aligned (`pyproject.toml`, `__version__`, `/status`, FastAPI metadata).
-- Gemini streaming no longer emits OpenAI `[DONE]` when manifest has no `done_signal`.
 
 ## [1.0.0] - 2026-07-01
 
