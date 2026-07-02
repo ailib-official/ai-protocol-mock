@@ -1,12 +1,12 @@
 # Changelog
 
-## Unreleased
+## [1.0.1] - 2026-07-02
 
-### Added (MOCK-001-R2b)
+### Added
+- **StreamEncoder** (MOCK-001-R2b): manifest-driven SSE framing via `engine/stream.py`.
 
-- **StreamEncoder** (`engine/stream.py`): SSE framing driven by manifest `streaming.decoder` (`sse`, `anthropic_sse`, `gemini_sse`).
-- **event_map parity**: OpenAI / Anthropic stream chunks align with manifest `event_map` emit types; Anthropic uses `event:` lines without OpenAI `[DONE]`.
-- **Resolver-wired streaming**: `handle_chat` resolves provider via `ContractResolver` + `route_map` (path heuristics removed).
+### Changed (MOCK-001-R4)
+- Version strings aligned to **1.0.1**; PyPI publish on tag `v1.0.1`.
 
 ## [1.0.0] - 2026-07-01
 
