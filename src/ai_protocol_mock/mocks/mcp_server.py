@@ -10,6 +10,8 @@ import json
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from ai_protocol_mock import __version__
+
 # Default tools for mock
 DEFAULT_TOOLS = [
     {
@@ -89,7 +91,7 @@ def create_mcp_router() -> APIRouter:
             result = {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "ai-protocol-mock", "version": "0.1.0"},
+                "serverInfo": {"name": "ai-protocol-mock", "version": __version__},
             }
             return JSONResponse(content={"jsonrpc": "2.0", "id": req_id, "result": result})
 

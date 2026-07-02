@@ -20,6 +20,7 @@ from ai_protocol_mock.config import config
 from ai_protocol_mock.engine.errors import apply_mock_error, is_stream_interrupt
 from ai_protocol_mock.engine.generator import generate_chat_response, openai_stream_chunks, parse_chat_context
 from ai_protocol_mock.engine.resolver import ContractResolver
+from ai_protocol_mock.engine.stream import StreamEncoder, resolve_request_path
 
 
 def get_provider_contracts(manifest_dir: Path | None = None) -> list[dict[str, Any]]:
@@ -342,17 +343,9 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
         if config.RESPONSE_DELAY > 0:
             await asyncio.sleep(config.RESPONSE_DELAY)
 
-        # Find matching style by path
-        style: str = "openai"
         req_path = path or str(request.url.path)
-        for route_path, (_, s) in route_map.items():
-            if req_path == route_path or req_path.endswith(route_path):
-                style = s
-                break
-        if "/messages" in req_path:
-            style = "anthropic"
-        elif ":generateContent" in req_path or ":streamGenerateContent" in req_path:
-            style = "gemini"
+        resolution = resolve_request_path(resolver, route_map, req_path)
+        style = resolution.response_handler()
 
         ctx = parse_chat_context(
             style=style,  # type: ignore[arg-type]
@@ -380,14 +373,11 @@ def create_http_router(manifest_dir: Path | None = None) -> APIRouter:
                 )
 
         if stream:
-            import json
+            encoder = StreamEncoder(resolution)
+            chunks = resp if isinstance(resp, list) else [resp]
 
             def gen():
-                chunks = resp if isinstance(resp, list) else [resp]
-                for chunk in chunks:
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                if not is_stream_interrupt(mock_error):
-                    yield "data: [DONE]\n\n"
+                yield from encoder.encode_lines(chunks, emit_terminal=not is_stream_interrupt(mock_error))
 
             return StreamingResponse(gen(), media_type="text/event-stream")
         return resp
