@@ -59,7 +59,7 @@ def sync_path(base_url: str, rel_path: str, force: bool) -> tuple[int, int]:
         "v2/providers": [
             "openai.yaml",
             "anthropic.yaml",
-            "google.yaml",
+            "gemini.yaml",
             "deepseek.yaml",
             "qwen.yaml",
             "doubao.yaml",
