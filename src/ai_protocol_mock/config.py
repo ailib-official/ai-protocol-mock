@@ -21,7 +21,8 @@ class Config:
     MANIFEST_DIR: Path = Path(os.getenv("MANIFEST_DIR", "manifests"))
     MANIFEST_SYNC_URL: str = os.getenv(
         "MANIFEST_SYNC_URL",
-        "https://raw.githubusercontent.com/ailib-official/ai-protocol/v1.0.0/",
+        "https://raw.githubusercontent.com/ailib-official/ai-protocol/"
+        "749cb825c99f03e9dc737294b41fd5f5552533b4/",
     )
     RESPONSE_DELAY: float = float(os.getenv("RESPONSE_DELAY", "0.0"))
     ERROR_RATE: float = float(os.getenv("ERROR_RATE", "0.0"))

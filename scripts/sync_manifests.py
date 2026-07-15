@@ -16,7 +16,11 @@ from pathlib import Path
 import httpx
 
 # Default sync URL (ai-protocol main)
-DEFAULT_SYNC_URL = "https://raw.githubusercontent.com/ailib-official/ai-protocol/v1.0.0/"
+# Default sync URL — PROTO-PIN tip (post PT-ARCH-005c; gemini canonical)
+DEFAULT_SYNC_URL = (
+    "https://raw.githubusercontent.com/ailib-official/ai-protocol/"
+    "749cb825c99f03e9dc737294b41fd5f5552533b4/"
+)
 MANIFEST_DIR = Path(__file__).resolve().parents[1] / "manifests"
 
 
