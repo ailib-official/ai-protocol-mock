@@ -17,7 +17,7 @@ import httpx
 
 # Default sync URL — PROTO-PIN tip (post PT-ARCH-005c; gemini canonical)
 DEFAULT_SYNC_URL = (
-    "https://raw.githubusercontent.com/ailib-official/ai-protocol/749cb825c99f03e9dc737294b41fd5f5552533b4/"
+    "https://raw.githubusercontent.com/ailib-official/ai-protocol/627a6ebb765a3810c52822e84fdee95bb1ee24a4/"
 )
 MANIFEST_DIR = Path(__file__).resolve().parents[1] / "manifests"
 
