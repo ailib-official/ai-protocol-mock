@@ -31,8 +31,8 @@ docker-compose up -d
 |----------|---------|-------------|
 | HTTP_PORT | 4010 | Port for HTTP and MCP (MCP at /mcp) |
 | MANIFEST_DIR | manifests | Directory for synced manifests |
-| MANIFEST_SYNC_URL | https://raw.githubusercontent.com/ailib-official/ai-protocol/v1.0.0/ | Source for manifest sync (pin `v1.0.0` for reproducible CI) |
-| AI_PROTOCOL_TAG | (optional) | Convenience alias; docker-compose sets `v1.0.0` |
+| MANIFEST_SYNC_URL | https://raw.githubusercontent.com/ailib-official/ai-protocol/d61b701…/ | Source for manifest sync (PROTO-PIN **ai-protocol v1.2.0**) |
+| AI_PROTOCOL_TAG | (optional) | Convenience alias; docker-compose sets the same PROTO-PIN commit |
 | RESPONSE_DELAY | 0 | Delay in seconds before responding |
 | ERROR_RATE | 0 | Probability (0-1) of returning 429/500/503 |
 | MOCK_CONTENT | Mock response from ai-protocol-mock | Default response content |
@@ -153,10 +153,10 @@ python scripts/sync_manifests.py [--force] [--url URL] [--tag REF]
 ```
 
 - `--force` - Overwrite existing files
-- `--tag REF` - Pin to a specific ai-protocol ref (e.g. `v1.0.0`, `main`; **default URL pins `v1.0.0`**)
+- `--tag REF` - Pin to a specific ai-protocol ref (e.g. `v1.2.0`, commit SHA, `main`; **default URL pins v1.2.0 tip**)
 - `--url URL` - Custom base URL (overrides default pinned release)
 
-Run before starting the server to ensure manifests are up to date. **CI and docker-compose should use `--tag v1.0.0`** (or equivalent URL) so integration tests match the v1.0.0 protocol matrix.
+Run before starting the server to ensure manifests are up to date. **CI and docker-compose should use the PROTO-PIN commit for ai-protocol v1.2.0** so integration tests match the post–GOV-007 release train.
 
 ## v1.0 migration (from 0.1.x)
 
@@ -164,7 +164,7 @@ Run before starting the server to ensure manifests are up to date. **CI and dock
 |-------|-------|
 | Path heuristics (`/messages` → Anthropic) | `ContractResolver` + manifest `streaming.decoder.strategy` / `ProviderContract` |
 | Hardcoded JSON shapes only | `X-Mock-*` generative branches (reasoning, tools, structured output) |
-| `main` manifest sync | Pin **`ai-protocol@v1.0.0`** in CI and `sync_manifests.py` |
+| Floating `main` sync | Pin a release tip (currently **ai-protocol v1.2.0** / PROTO-PIN commit) in CI and `sync_manifests.py` |
 
 Breaking changes are documented in CHANGELOG; PyPI **1.0.1** ships after four-runtime Mock Integration CI is green (MOCK-001-R4).
 
