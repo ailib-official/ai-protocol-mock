@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+## [1.1.0] - 2026-08-08
+
 ### Changed
+
+- Package version **1.1.0** (GOV-007 Phase2 post-train mock release).
 
 - **PROTO-PIN**: Sync / Docker / config default to ai-protocol **v1.2.0** (`d61b70137ef1f7b736a8945a9105f7e766b24906`).
 
