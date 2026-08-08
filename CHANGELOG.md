@@ -1,6 +1,12 @@
-# Changelog
+﻿# Changelog
 
 ## Unreleased
+
+## [1.1.1] - 2026-08-08
+
+### Fixed
+
+- Align `__version__` with package metadata (was stuck at 1.0.1 while PyPI reported 1.1.0).
 
 ## [1.1.0] - 2026-08-08
 
@@ -24,7 +30,7 @@
 
 ## [1.0.0] - 2026-07-01
 
-### Changed (MOCK-001-R1/R2/R3, merged PR #2–#3)
+### Changed (MOCK-001-R1/R2/R3, merged PR #2鈥?3)
 
 - **Protocol-driven resolver**: `ManifestRegistry` + `ContractResolver` replace path heuristics for `/providers` and chat routing.
 - **Generative mock engine**: `X-Mock-Reasoning`, structured `response_format`, parallel/recursive tool calls, and standard error injection via `X-Mock-Error`.
@@ -75,6 +81,7 @@
 ### Added
 
 - **Third-party integration**: README section for ZeroClaw/ZeroSpider and CI usage
-- **Third-party integration (中文)**: README_CN 第三方集成章节
+- **Third-party integration (涓枃)**: README_CN 绗笁鏂归泦鎴愮珷鑺?
 
 ## 0.1.6 - (previous)
+
